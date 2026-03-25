@@ -1,0 +1,329 @@
+@import "tailwindcss";
+@import "github-markdown-css/github-markdown.css";
+@import "highlight.js/styles/github.css";
+@import "katex/dist/katex.min.css";
+
+@layer base {
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --radius: 0.625rem;
+    --chart-1: oklch(0.646 0.222 41.116);
+    --chart-2: oklch(0.6 0.118 184.704);
+    --chart-3: oklch(0.398 0.07 227.392);
+    --chart-4: oklch(0.828 0.189 84.429);
+    --chart-5: oklch(0.769 0.188 70.08);
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+  }
+
+  .dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.396 0.141 25.723);
+    --destructive-foreground: oklch(0.637 0.237 25.331);
+    --border: oklch(0.269 0 0);
+    --input: oklch(0.269 0 0);
+    --ring: oklch(0.439 0 0);
+    --chart-1: oklch(0.488 0.243 264.376);
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.769 0.188 70.08);
+    --chart-4: oklch(0.627 0.265 303.9);
+    --chart-5: oklch(0.645 0.246 16.439);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(0.269 0 0);
+    --sidebar-ring: oklch(0.439 0 0);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ── Markdown preview：根据主题类切换预览底色 ───────────────────── */
+.preview-surface-light {
+  color-scheme: light;
+  background: oklch(1 0 0);
+}
+.preview-surface-dark {
+  color-scheme: dark;
+  background: #0d1117;
+}
+
+/* ── highlight.js：暗色模式下覆盖代码块配色 ─────────────────────── */
+.preview-surface-dark pre.hljs,
+.preview-surface-dark code.hljs {
+  background: #0d1117;
+  color: #e6edf3;
+}
+.preview-surface-dark .hljs-keyword,
+.preview-surface-dark .hljs-selector-tag,
+.preview-surface-dark .hljs-literal,
+.preview-surface-dark .hljs-section,
+.preview-surface-dark .hljs-link {
+  color: #ff7b72;
+}
+.preview-surface-dark .hljs-string,
+.preview-surface-dark .hljs-title,
+.preview-surface-dark .hljs-name,
+.preview-surface-dark .hljs-type,
+.preview-surface-dark .hljs-attribute,
+.preview-surface-dark .hljs-symbol,
+.preview-surface-dark .hljs-bullet,
+.preview-surface-dark .hljs-addition,
+.preview-surface-dark .hljs-variable,
+.preview-surface-dark .hljs-template-tag,
+.preview-surface-dark .hljs-template-variable {
+  color: #a5d6ff;
+}
+.preview-surface-dark .hljs-comment,
+.preview-surface-dark .hljs-quote,
+.preview-surface-dark .hljs-deletion,
+.preview-surface-dark .hljs-meta {
+  color: #8b949e;
+}
+.preview-surface-dark .hljs-number,
+.preview-surface-dark .hljs-built_in,
+.preview-surface-dark .hljs-builtin-name,
+.preview-surface-dark .hljs-params {
+  color: #79c0ff;
+}
+.preview-surface-dark .hljs-function {
+  color: #d2a8ff;
+}
+
+/* ── 外观工具栏控件 ──────────────────────────────────────────────── */
+.toolbar-select {
+  @apply h-7 rounded-md border bg-background px-2 text-xs text-foreground shadow-xs outline-none;
+}
+
+.toolbar-select:focus {
+  @apply ring-2 ring-ring/40;
+}
+
+.toolbar-range {
+  width: 92px;
+}
+
+/* ── 编辑器字体变量 ──────────────────────────────────────────────── */
+.cm-editor,
+.cm-scroller,
+.cm-content,
+.cm-gutters {
+  font-family: var(--editor-font-family);
+  font-size: var(--editor-font-size);
+}
+
+/* ── 预览字体族 ─────────────────────────────────────────────────── */
+.preview-font-sans .markdown-body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+.preview-font-serif .markdown-body {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Noto Serif SC", Georgia, serif;
+}
+
+/* ── Notion 风格预览主题 ────────────────────────────────────────── */
+.preview-theme-notion .markdown-body {
+  line-height: 1.75;
+  max-width: 760px;
+}
+
+.preview-theme-notion .markdown-body h1,
+.preview-theme-notion .markdown-body h2,
+.preview-theme-notion .markdown-body h3,
+.preview-theme-notion .markdown-body h4,
+.preview-theme-notion .markdown-body h5,
+.preview-theme-notion .markdown-body h6 {
+  border-bottom: none;
+  letter-spacing: -0.02em;
+}
+
+.preview-theme-notion .markdown-body h1 {
+  font-size: 2.2em;
+  margin-bottom: 0.6em;
+}
+
+.preview-theme-notion .markdown-body h2 {
+  font-size: 1.6em;
+  margin-top: 1.8em;
+}
+
+.preview-theme-notion .markdown-body blockquote {
+  border-left: 3px solid rgba(55, 53, 47, 0.2);
+  color: inherit;
+  background: rgba(55, 53, 47, 0.04);
+  padding: 0.75em 1em;
+  border-radius: 0.5rem;
+}
+
+.preview-theme-notion .markdown-body code {
+  border-radius: 0.35rem;
+  padding: 0.15em 0.35em;
+}
+
+.preview-theme-notion .markdown-body pre {
+  border-radius: 0.85rem;
+  border: none;
+}
+
+.preview-theme-notion .markdown-body table {
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: 0.75rem;
+}
+
+.preview-theme-notion .markdown-body table th {
+  font-weight: 600;
+}
+
+.preview-theme-notion .markdown-body table th,
+.preview-theme-notion .markdown-body table td {
+  border: 1px solid rgba(55, 53, 47, 0.12);
+  padding: 0.65em 0.85em;
+}
+
+.preview-surface-light.preview-theme-notion .markdown-body {
+  color: #37352f;
+}
+
+.preview-surface-light.preview-theme-notion .markdown-body code {
+  background: rgba(135, 131, 120, 0.15);
+  color: #eb5757;
+}
+
+.preview-surface-light.preview-theme-notion .markdown-body table th {
+  background: rgba(55, 53, 47, 0.06);
+}
+
+.preview-surface-dark.preview-theme-notion .markdown-body {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.preview-surface-dark.preview-theme-notion .markdown-body blockquote {
+  border-left-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.preview-surface-dark.preview-theme-notion .markdown-body code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ff8f8f;
+}
+
+.preview-surface-dark.preview-theme-notion .markdown-body table th,
+.preview-surface-dark.preview-theme-notion .markdown-body table td {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.preview-surface-dark.preview-theme-notion .markdown-body table th {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ── Electron 窗口拖拽区域 ───────────────────────────────────────── */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag-region {
+  -webkit-app-region: no-drag;
+}
+
+/* ── CodeMirror 编辑器占满父容器高度 ────────────────────────────── */
+.cm-editor {
+  height: 100%;
+}
+.cm-scroller {
+  overflow: auto;
+}
