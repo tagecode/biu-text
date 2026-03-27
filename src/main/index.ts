@@ -14,7 +14,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false,
-    autoHideMenuBar: false,
+    autoHideMenuBar: process.platform !== 'darwin',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -23,6 +23,10 @@ function createWindow(): void {
       nodeIntegration: false
     }
   })
+
+  if (process.platform !== 'darwin') {
+    mainWindow.setMenuBarVisibility(false)
+  }
 
   mainWindow.on('ready-to-show', () => {
     mainWindow!.show()
@@ -50,6 +54,11 @@ function createWindow(): void {
 
 function buildMenu(): void {
   const isMac = process.platform === 'darwin'
+
+  if (!isMac) {
+    Menu.setApplicationMenu(null)
+    return
+  }
 
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
