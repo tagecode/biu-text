@@ -76,6 +76,7 @@
   "build": {
     "appId": "com.biu-text.desktop",
     "productName": "BiuText",
+    "artifactName": "${productName}-v${version}-${os}-${arch}.${ext}",
     "copyright": "Copyright © 2026",
     "directories": {
       "buildResources": "resources"
