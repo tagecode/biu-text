@@ -3,10 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "BiuText - 基于 Electron + React + Tailwind CSS + shadcn/ui 等技术栈开发的跨平台桌面端 markdown 编辑器",
-  "author": {
-    "name": "Your Name",
-    "email": "your@email.com"
-  },
+  "author": "TageCode <tagecode@hotmail.com>",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
