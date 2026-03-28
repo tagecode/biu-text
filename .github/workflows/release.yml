@@ -24,7 +24,10 @@ jobs:
             artifact_glob: 'dist/*.exe'
           - os: ubuntu-latest
             platform: linux
-            artifact_glob: 'dist/*.{AppImage,deb}'
+            # upload-artifact 的 glob 不支持 {a,b} 花括号展开，需分行写两个模式
+            artifact_glob: |
+              dist/*.AppImage
+              dist/*.deb
 
     runs-on: ${{ matrix.os }}
 
