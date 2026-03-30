@@ -1,6 +1,6 @@
 {
   "name": "biu-text",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "BiuText - 基于 Electron + React + Tailwind CSS + shadcn/ui 等技术栈开发的跨平台桌面端 markdown 编辑器",
   "author": "TageCode <tagecode@hotmail.com>",
