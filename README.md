@@ -51,6 +51,36 @@ npx electron-icon-builder --input build/icon.png --output resources --flatten
 
 会在 `resources/icons/` 下生成 macOS（`icon.icns`）、Windows（`icon.ico`）及 Linux 所需的多尺寸 PNG，与 `package.json` 中 electron-builder 的图标配置一致。
 
+## Git Tag 发布（触发 Actions 打包）
+
+本项目通过 **push tag 到远程** 触发 GitHub Actions 进行跨平台打包。常用命令如下：
+
+```bash
+# 1) 同步并确认当前分支状态
+git pull --rebase
+git status
+
+# 2) 创建版本 tag（示例：v0.3.0）
+git tag -a v0.3.0 -m "release: v0.3.0"
+
+# 3) 推送单个 tag（触发 GitHub Actions）
+git push origin v0.3.0
+
+# 4) 查看本地/远程 tag
+git tag
+git ls-remote --tags origin
+```
+
+如需撤销错误 tag：
+
+```bash
+# 删除本地 tag
+git tag -d v0.3.0
+
+# 删除远程 tag
+git push origin :refs/tags/v0.3.0
+```
+
 ## 项目结构
 
 ```
