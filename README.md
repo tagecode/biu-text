@@ -63,6 +63,11 @@ git status
 # 2) 创建版本 tag（示例：v0.3.0）
 git tag -a v0.3.0 -m "release: v0.3.0"
 
+git tag -a v0.3.0 \
+  -m "release: v0.3.0" \
+  -m "新增：导出 HTML/PDF、最近文件" \
+  -m "修复：预览开关与搜索替换体验"
+
 # 3) 推送单个 tag（触发 GitHub Actions）
 git push origin v0.3.0
 
