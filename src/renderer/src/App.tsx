@@ -1,14 +1,16 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { EditorView } from '@codemirror/view'
 import { Editor } from '@/components/Editor'
 import { Preview } from '@/components/Preview'
 import { Toolbar } from '@/components/Toolbar'
 import { Splitter } from '@/components/Splitter'
 import { StatusBar } from '@/components/StatusBar'
+import { SettingsPanel } from '@/components/SettingsPanel'
 import { useFile } from '@/hooks/useFile'
 import { useTheme } from '@/hooks/useTheme'
 import { useAppearanceSettings } from '@/hooks/useAppearanceSettings'
 import { useWordCount } from '@/hooks/useWordCount'
+import { buildExportHtmlDocument } from '@/lib/export-document'
 
 // ─── Editor formatting helpers ───────────────────────────────────
 function wrapSelection(view: EditorView, before: string, after = before) {
@@ -45,6 +47,7 @@ const DEFAULT_LEFT_PCT = 50
 const MIN_LEFT_PCT = 20
 const MAX_LEFT_PCT = 80
 const SPLITTER_STORAGE_KEY = 'biu-text:splitter-left-pct'
+const PREVIEW_VISIBLE_STORAGE_KEY = 'biu-text:preview-visible'
 
 function readStoredLeftPct(): number {
   try {
@@ -57,9 +60,19 @@ function readStoredLeftPct(): number {
   }
 }
 
+function readStoredPreviewVisible(): boolean {
+  try {
+    const raw = localStorage.getItem(PREVIEW_VISIBLE_STORAGE_KEY)
+    if (raw === null) return true
+    return raw === 'true'
+  } catch {
+    return true
+  }
+}
+
 // ─── App ─────────────────────────────────────────────────────────
 function App() {
-  const { content, setContent, newFile, openFile, saveFile } = useFile()
+  const { content, filePath, setContent, newFile, openFile, saveFile, exportHtml, exportPdf } = useFile()
   const { theme, themeMode, setThemeMode, cycleThemeMode } = useTheme()
   const {
     editorFontFamily,
@@ -78,6 +91,8 @@ function App() {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const [leftPercent, setLeftPercent] = useState(readStoredLeftPct)
+  const [previewVisible, setPreviewVisible] = useState(readStoredPreviewVisible)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [cursorLine, setCursorLine] = useState(1)
   const [cursorCol, setCursorCol] = useState(1)
 
@@ -95,6 +110,14 @@ function App() {
   const handleSplitterReset = useCallback(() => {
     setLeftPercent(DEFAULT_LEFT_PCT)
     localStorage.setItem(SPLITTER_STORAGE_KEY, String(DEFAULT_LEFT_PCT))
+  }, [])
+
+  const handleTogglePreviewVisible = useCallback(() => {
+    setPreviewVisible((prev) => {
+      const next = !prev
+      localStorage.setItem(PREVIEW_VISIBLE_STORAGE_KEY, String(next))
+      return next
+    })
   }, [])
 
   // ── Cursor ──────────────────────────────────────────────────────
@@ -120,34 +143,72 @@ function App() {
     if (editorViewRef.current) insertLink(editorViewRef.current)
   }, [])
 
+  const getExportTitle = useCallback(() => {
+    if (!filePath) return 'BiuText 文档'
+    const normalized = filePath.replaceAll('\\', '/')
+    return normalized.split('/').pop() ?? 'BiuText 文档'
+  }, [filePath])
+
+  const handleExportHtml = useCallback(async () => {
+    const html = buildExportHtmlDocument({
+      title: getExportTitle(),
+      content,
+      theme,
+      previewTheme,
+      previewFontFamily,
+      fontSize
+    })
+    await exportHtml(html)
+  }, [content, theme, previewTheme, previewFontFamily, fontSize, getExportTitle, exportHtml])
+
+  const handleExportPdf = useCallback(async () => {
+    const html = buildExportHtmlDocument({
+      title: getExportTitle(),
+      content,
+      theme,
+      previewTheme,
+      previewFontFamily,
+      fontSize
+    })
+    await exportPdf(html)
+  }, [content, theme, previewTheme, previewFontFamily, fontSize, getExportTitle, exportPdf])
+
+  useEffect(() => {
+    const unsubExportHtml = window.fileAPI.onMenuExportHtml(() => {
+      void handleExportHtml()
+    })
+    const unsubExportPdf = window.fileAPI.onMenuExportPdf(() => {
+      void handleExportPdf()
+    })
+    return () => {
+      unsubExportHtml()
+      unsubExportPdf()
+    }
+  }, [handleExportHtml, handleExportPdf])
+
   // ── Render ──────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       <Toolbar
-        theme={theme}
         themeMode={themeMode}
         wordCount={wordCount}
-        editorFontFamily={editorFontFamily}
-        previewFontFamily={previewFontFamily}
-        fontSize={fontSize}
-        previewTheme={previewTheme}
         onNewFile={newFile}
         onOpenFile={openFile}
         onSaveFile={saveFile}
+        onExportHtml={handleExportHtml}
+        onExportPdf={handleExportPdf}
+        previewVisible={previewVisible}
+        onTogglePreviewVisible={handleTogglePreviewVisible}
+        onOpenSettings={() => setSettingsOpen(true)}
         onBold={handleBold}
         onItalic={handleItalic}
         onCode={handleCode}
         onLink={handleLink}
-        onThemeModeChange={setThemeMode}
-        onEditorFontFamilyChange={setEditorFontFamily}
-        onPreviewFontFamilyChange={setPreviewFontFamily}
-        onFontSizeChange={setFontSize}
-        onPreviewThemeChange={setPreviewTheme}
       />
 
       <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden">
         {/* 左侧编辑区 */}
-        <div style={{ width: `${leftPercent}%` }} className="min-w-0 overflow-hidden">
+        <div style={{ width: previewVisible ? `${leftPercent}%` : '100%' }} className="min-w-0 overflow-hidden">
           <Editor
             content={content}
             theme={theme}
@@ -160,19 +221,23 @@ function App() {
           />
         </div>
 
-        <Splitter onDrag={handleSplitterDrag} onReset={handleSplitterReset} />
+        {previewVisible && (
+          <>
+            <Splitter onDrag={handleSplitterDrag} onReset={handleSplitterReset} />
 
-        {/* 右侧预览区 */}
-        <div style={{ width: `${100 - leftPercent}%` }} className="min-w-0 overflow-hidden">
-          <Preview
-            ref={previewScrollRef}
-            content={content}
-            theme={theme}
-            previewTheme={previewTheme}
-            previewFontFamily={previewFontFamily}
-            fontSize={fontSize}
-          />
-        </div>
+            {/* 右侧预览区 */}
+            <div style={{ width: `${100 - leftPercent}%` }} className="min-w-0 overflow-hidden">
+              <Preview
+                ref={previewScrollRef}
+                content={content}
+                theme={theme}
+                previewTheme={previewTheme}
+                previewFontFamily={previewFontFamily}
+                fontSize={fontSize}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <StatusBar
@@ -184,6 +249,21 @@ function App() {
         previewTheme={previewTheme}
         fontSize={fontSize}
         onCycleThemeMode={cycleThemeMode}
+      />
+
+      <SettingsPanel
+        open={settingsOpen}
+        themeMode={themeMode}
+        editorFontFamily={editorFontFamily}
+        previewFontFamily={previewFontFamily}
+        fontSize={fontSize}
+        previewTheme={previewTheme}
+        onClose={() => setSettingsOpen(false)}
+        onThemeModeChange={setThemeMode}
+        onEditorFontFamilyChange={setEditorFontFamily}
+        onPreviewFontFamilyChange={setPreviewFontFamily}
+        onFontSizeChange={setFontSize}
+        onPreviewThemeChange={setPreviewTheme}
       />
     </div>
   )

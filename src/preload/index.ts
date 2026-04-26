@@ -7,11 +7,20 @@ const fileAPI = {
   openDialog: (): Promise<{ path: string; content: string } | null> =>
     ipcRenderer.invoke(IPC.FILE_OPEN_DIALOG),
 
+  openPath: (path: string): Promise<{ path: string; content: string } | null> =>
+    ipcRenderer.invoke(IPC.FILE_OPEN_PATH, { path }),
+
   save: (path: string, content: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke(IPC.FILE_SAVE, { path, content }),
 
   saveAs: (content: string): Promise<{ path: string } | null> =>
     ipcRenderer.invoke(IPC.FILE_SAVE_AS, { content }),
+
+  exportHtml: (html: string, fileName?: string): Promise<{ path: string } | null> =>
+    ipcRenderer.invoke(IPC.FILE_EXPORT_HTML, { html, fileName }),
+
+  exportPdf: (html: string, fileName?: string): Promise<{ path: string } | null> =>
+    ipcRenderer.invoke(IPC.FILE_EXPORT_PDF, { html, fileName }),
 
   onMenuNew: (cb: () => void): UnsubFn => {
     const handler = () => cb()
@@ -25,6 +34,12 @@ const fileAPI = {
     return () => ipcRenderer.removeListener(IPC.MENU_OPEN_FILE, handler)
   },
 
+  onMenuOpenRecent: (cb: (path: string) => void): UnsubFn => {
+    const handler = (_: Electron.IpcRendererEvent, path: string) => cb(path)
+    ipcRenderer.on(IPC.MENU_OPEN_RECENT, handler)
+    return () => ipcRenderer.removeListener(IPC.MENU_OPEN_RECENT, handler)
+  },
+
   onMenuSave: (cb: () => void): UnsubFn => {
     const handler = () => cb()
     ipcRenderer.on(IPC.MENU_SAVE, handler)
@@ -35,6 +50,18 @@ const fileAPI = {
     const handler = () => cb()
     ipcRenderer.on(IPC.MENU_SAVE_AS, handler)
     return () => ipcRenderer.removeListener(IPC.MENU_SAVE_AS, handler)
+  },
+
+  onMenuExportHtml: (cb: () => void): UnsubFn => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.MENU_EXPORT_HTML, handler)
+    return () => ipcRenderer.removeListener(IPC.MENU_EXPORT_HTML, handler)
+  },
+
+  onMenuExportPdf: (cb: () => void): UnsubFn => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.MENU_EXPORT_PDF, handler)
+    return () => ipcRenderer.removeListener(IPC.MENU_EXPORT_PDF, handler)
   }
 }
 

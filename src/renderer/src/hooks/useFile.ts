@@ -70,13 +70,25 @@ export function useFile() {
     setSavedContent('')
   }, [])
 
-  const openFile = useCallback(async () => {
-    const result = await window.fileAPI.openDialog()
+  const applyOpenedFile = useCallback((result: { path: string; content: string } | null) => {
     if (!result) return
     setContentState(result.content)
     setFilePath(result.path)
     setSavedContent(result.content)
   }, [])
+
+  const openFile = useCallback(async () => {
+    const result = await window.fileAPI.openDialog()
+    applyOpenedFile(result)
+  }, [applyOpenedFile])
+
+  const openRecentFile = useCallback(
+    async (path: string) => {
+      const result = await window.fileAPI.openPath(path)
+      applyOpenedFile(result)
+    },
+    [applyOpenedFile]
+  )
 
   const saveFile = useCallback(async () => {
     const { content: cur, filePath: path } = stateRef.current
@@ -100,19 +112,33 @@ export function useFile() {
     setSavedContent(cur)
   }, [])
 
+  const exportHtml = useCallback(async (html: string) => {
+    const { filePath: path } = stateRef.current
+    const fileName = path ? path.replaceAll('\\', '/').split('/').pop() ?? undefined : undefined
+    await window.fileAPI.exportHtml(html, fileName)
+  }, [])
+
+  const exportPdf = useCallback(async (html: string) => {
+    const { filePath: path } = stateRef.current
+    const fileName = path ? path.replaceAll('\\', '/').split('/').pop() ?? undefined : undefined
+    await window.fileAPI.exportPdf(html, fileName)
+  }, [])
+
   // 监听菜单事件
   useEffect(() => {
     const unsubNew = window.fileAPI.onMenuNew(newFile)
     const unsubOpen = window.fileAPI.onMenuOpen(openFile)
+    const unsubOpenRecent = window.fileAPI.onMenuOpenRecent(openRecentFile)
     const unsubSave = window.fileAPI.onMenuSave(saveFile)
     const unsubSaveAs = window.fileAPI.onMenuSaveAs(saveFileAs)
     return () => {
       unsubNew()
       unsubOpen()
+      unsubOpenRecent()
       unsubSave()
       unsubSaveAs()
     }
-  }, [newFile, openFile, saveFile, saveFileAs])
+  }, [newFile, openFile, openRecentFile, saveFile, saveFileAs])
 
   // 窗口关闭前确认
   useEffect(() => {
@@ -135,7 +161,7 @@ export function useFile() {
   useEffect(() => {
     let title = 'BiuText'
     if (filePath) {
-      const fileName = filePath.split('/').pop() ?? filePath
+      const fileName = filePath.replaceAll('\\', '/').split('/').pop() ?? filePath
       title = isDirty ? `${fileName} · BiuText` : `${fileName} - BiuText`
     } else if (isDirty) {
       title = '未命名 · BiuText'
@@ -152,6 +178,8 @@ export function useFile() {
     newFile,
     openFile,
     saveFile,
-    saveFileAs
+    saveFileAs,
+    exportHtml,
+    exportPdf
   }
 }

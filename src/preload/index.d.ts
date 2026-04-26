@@ -4,12 +4,18 @@ type UnsubFn = () => void
 
 interface FileAPI {
   openDialog: () => Promise<{ path: string; content: string } | null>
+  openPath: (path: string) => Promise<{ path: string; content: string } | null>
   save: (path: string, content: string) => Promise<{ success: boolean }>
   saveAs: (content: string) => Promise<{ path: string } | null>
+  exportHtml: (html: string, fileName?: string) => Promise<{ path: string } | null>
+  exportPdf: (html: string, fileName?: string) => Promise<{ path: string } | null>
   onMenuNew: (cb: () => void) => UnsubFn
   onMenuOpen: (cb: () => void) => UnsubFn
+  onMenuOpenRecent: (cb: (path: string) => void) => UnsubFn
   onMenuSave: (cb: () => void) => UnsubFn
   onMenuSaveAs: (cb: () => void) => UnsubFn
+  onMenuExportHtml: (cb: () => void) => UnsubFn
+  onMenuExportPdf: (cb: () => void) => UnsubFn
 }
 
 interface ThemeAPI {

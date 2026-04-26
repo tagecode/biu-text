@@ -1,11 +1,53 @@
 import { app, shell, BrowserWindow, ipcMain, Menu, dialog, nativeTheme } from 'electron'
-import { join } from 'path'
+import { join, basename, extname } from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-channels'
 
 let mainWindow: BrowserWindow | null = null
 let isReadyToClose = false
+let recentFiles: string[] = []
+const RECENT_FILES_LIMIT = 10
+
+function recentFilesStorePath(): string {
+  return join(app.getPath('userData'), 'recent-files.json')
+}
+
+function getExportBaseName(fileName?: string): string {
+  if (!fileName) return 'document'
+  const base = basename(fileName, extname(fileName)).trim()
+  return base || 'document'
+}
+
+async function loadRecentFiles(): Promise<void> {
+  try {
+    const raw = await readFile(recentFilesStorePath(), 'utf-8')
+    const data = JSON.parse(raw)
+    if (Array.isArray(data)) {
+      recentFiles = data.filter((item): item is string => typeof item === 'string').slice(0, RECENT_FILES_LIMIT)
+    } else {
+      recentFiles = []
+    }
+  } catch {
+    recentFiles = []
+  }
+}
+
+async function persistRecentFiles(): Promise<void> {
+  await writeFile(recentFilesStorePath(), JSON.stringify(recentFiles, null, 2), 'utf-8')
+}
+
+async function recordRecentFile(filePath: string): Promise<void> {
+  const normalized = filePath.trim()
+  if (!normalized) return
+  recentFiles = [normalized, ...recentFiles.filter((item) => item !== normalized)].slice(0, RECENT_FILES_LIMIT)
+  try {
+    await persistRecentFiles()
+  } catch {
+    // 最近文件持久化失败不影响核心读写流程
+  }
+  buildMenu()
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -92,6 +134,17 @@ function buildMenu(): void {
           accelerator: 'CmdOrCtrl+O',
           click: () => mainWindow?.webContents.send(IPC.MENU_OPEN_FILE)
         },
+        {
+          label: '最近文件',
+          submenu:
+            recentFiles.length > 0
+              ? recentFiles.map((path) => ({
+                  label: basename(path),
+                  sublabel: path,
+                  click: () => mainWindow?.webContents.send(IPC.MENU_OPEN_RECENT, path)
+                }))
+              : [{ label: '暂无最近文件', enabled: false }]
+        },
         { type: 'separator' },
         {
           label: '保存',
@@ -102,6 +155,17 @@ function buildMenu(): void {
           label: '另存为…',
           accelerator: 'CmdOrCtrl+Shift+S',
           click: () => mainWindow?.webContents.send(IPC.MENU_SAVE_AS)
+        },
+        { type: 'separator' },
+        {
+          label: '导出 HTML…',
+          accelerator: 'CmdOrCtrl+Shift+E',
+          click: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_HTML)
+        },
+        {
+          label: '导出 PDF…',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_PDF)
         },
         { type: 'separator' },
         isMac ? { role: 'close' as const } : { role: 'quit' as const }
@@ -154,7 +218,19 @@ ipcMain.handle(IPC.FILE_OPEN_DIALOG, async () => {
   if (canceled || !filePaths[0]) return null
   try {
     const content = await readFile(filePaths[0], 'utf-8')
+    await recordRecentFile(filePaths[0])
     return { path: filePaths[0], content }
+  } catch (err) {
+    dialog.showErrorBox('打开失败', String(err))
+    return null
+  }
+})
+
+ipcMain.handle(IPC.FILE_OPEN_PATH, async (_e, { path }: { path: string }) => {
+  try {
+    const content = await readFile(path, 'utf-8')
+    await recordRecentFile(path)
+    return { path, content }
   } catch (err) {
     dialog.showErrorBox('打开失败', String(err))
     return null
@@ -164,6 +240,7 @@ ipcMain.handle(IPC.FILE_OPEN_DIALOG, async () => {
 ipcMain.handle(IPC.FILE_SAVE, async (_e, { path, content }: { path: string; content: string }) => {
   try {
     await writeFile(path, content, 'utf-8')
+    await recordRecentFile(path)
     return { success: true }
   } catch (err) {
     dialog.showErrorBox('保存失败', String(err))
@@ -183,12 +260,78 @@ ipcMain.handle(IPC.FILE_SAVE_AS, async (_e, { content }: { content: string }) =>
   if (canceled || !filePath) return null
   try {
     await writeFile(filePath, content, 'utf-8')
+    await recordRecentFile(filePath)
     return { path: filePath }
   } catch (err) {
     dialog.showErrorBox('保存失败', String(err))
     return null
   }
 })
+
+ipcMain.handle(
+  IPC.FILE_EXPORT_HTML,
+  async (_e, { html, fileName }: { html: string; fileName?: string }) => {
+    if (!mainWindow) return null
+    const defaultName = `${getExportBaseName(fileName)}.html`
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: '导出 HTML',
+      defaultPath: defaultName,
+      filters: [
+        { name: 'HTML 文件', extensions: ['html'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    })
+    if (canceled || !filePath) return null
+    try {
+      await writeFile(filePath, html, 'utf-8')
+      return { path: filePath }
+    } catch (err) {
+      dialog.showErrorBox('导出 HTML 失败', String(err))
+      return null
+    }
+  }
+)
+
+ipcMain.handle(
+  IPC.FILE_EXPORT_PDF,
+  async (_e, { html, fileName }: { html: string; fileName?: string }) => {
+    if (!mainWindow) return null
+    const defaultName = `${getExportBaseName(fileName)}.pdf`
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: '导出 PDF',
+      defaultPath: defaultName,
+      filters: [
+        { name: 'PDF 文件', extensions: ['pdf'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    })
+    if (canceled || !filePath) return null
+
+    let pdfWindow: BrowserWindow | null = null
+    try {
+      pdfWindow = new BrowserWindow({
+        show: false,
+        webPreferences: {
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false
+        }
+      })
+      await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+      const pdfData = await pdfWindow.webContents.printToPDF({
+        printBackground: true,
+        preferCSSPageSize: true
+      })
+      await writeFile(filePath, pdfData)
+      return { path: filePath }
+    } catch (err) {
+      dialog.showErrorBox('导出 PDF 失败', String(err))
+      return null
+    } finally {
+      pdfWindow?.destroy()
+    }
+  }
+)
 
 ipcMain.on(IPC.APP_CLOSE_CONFIRMED, () => {
   isReadyToClose = true
@@ -213,7 +356,7 @@ ipcMain.on(IPC.THEME_SET, (_e, theme: 'light' | 'dark' | 'system') => {
 
 // ─── App Lifecycle ───────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.biu-text')
 
   app.on('browser-window-created', (_, window) => {
@@ -227,6 +370,7 @@ app.whenReady().then(() => {
     )
   })
 
+  await loadRecentFiles()
   buildMenu()
   createWindow()
 

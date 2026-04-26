@@ -4,6 +4,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { keymap } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
+import { search, openSearchPanel } from '@codemirror/search'
 import type { EditorFontFamily } from '@/hooks/useAppearanceSettings'
 import type { Theme } from '@/hooks/useTheme'
 
@@ -64,9 +65,19 @@ export function Editor({
   const extensions = [
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
+    // 显式启用搜索扩展，支持替换与正则/大小写/全词选项
+    search({ top: true }),
     // 格式化快捷键（优先级最高，防止被浏览器默认行为覆盖）
     Prec.highest(
       keymap.of([
+        {
+          key: 'Mod-f',
+          run: (view) => openSearchPanel(view)
+        },
+        {
+          key: 'Mod-h',
+          run: (view) => openSearchPanel(view)
+        },
         {
           key: 'Mod-b',
           run: (view) => { wrapSelection(view, '**'); return true }
