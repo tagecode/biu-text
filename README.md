@@ -41,6 +41,16 @@ npm run build:linux  # Linux
 
 国内网络可配合项目根目录 `.npmrc` 中的 Electron 镜像使用。
 
+## 应用图标
+
+更换源图后，将 `build/icon.png` 更新为新的 **PNG**（建议 1024×1024 正方形），然后在项目根目录执行：
+
+```bash
+npx electron-icon-builder --input build/icon.png --output resources --flatten
+```
+
+会在 `resources/icons/` 下生成 macOS（`icon.icns`）、Windows（`icon.ico`）及 Linux 所需的多尺寸 PNG，与 `package.json` 中 electron-builder 的图标配置一致。
+
 ## 项目结构
 
 ```
