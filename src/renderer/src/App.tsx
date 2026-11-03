@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EditorView } from '@codemirror/view'
 import { Editor } from '@/components/Editor'
 import { Preview } from '@/components/Preview'
@@ -30,10 +31,10 @@ function wrapSelection(view: EditorView, before: string, after = before) {
   view.focus()
 }
 
-function insertLink(view: EditorView) {
+function insertLink(view: EditorView, linkText: string) {
   const { from, to } = view.state.selection.main
   const selected = view.state.sliceDoc(from, to)
-  const text = selected || '链接文字'
+  const text = selected || linkText
   const insert = `[${text}](url)`
   view.dispatch({
     changes: { from, to, insert },
@@ -72,6 +73,7 @@ function readStoredPreviewVisible(): boolean {
 
 // ─── App ─────────────────────────────────────────────────────────
 function App() {
+  const { t } = useTranslation()
   const { content, filePath, setContent, newFile, openFile, saveFile, exportHtml, exportPdf } = useFile()
   const { theme, themeMode, setThemeMode, cycleThemeMode } = useTheme()
   const {
@@ -140,14 +142,14 @@ function App() {
   }, [])
 
   const handleLink = useCallback(() => {
-    if (editorViewRef.current) insertLink(editorViewRef.current)
-  }, [])
+    if (editorViewRef.current) insertLink(editorViewRef.current, t('editor.linkText'))
+  }, [t])
 
   const getExportTitle = useCallback(() => {
-    if (!filePath) return 'BiuText 文档'
+    if (!filePath) return t('app.document')
     const normalized = filePath.replaceAll('\\', '/')
-    return normalized.split('/').pop() ?? 'BiuText 文档'
-  }, [filePath])
+    return normalized.split('/').pop() ?? t('app.document')
+  }, [filePath, t])
 
   const handleExportHtml = useCallback(async () => {
     const html = buildExportHtmlDocument({

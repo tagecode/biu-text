@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAppLanguage } from '@/hooks/useAppLanguage'
+import type { AppLanguage } from '@shared/i18n/types'
 import type {
   EditorFontFamily,
   PreviewFontFamily,
@@ -37,39 +40,57 @@ export function SettingsPanel({
   onFontSizeChange,
   onPreviewThemeChange
 }: SettingsPanelProps) {
+  const { t } = useTranslation()
+  const { language, setLanguage } = useAppLanguage()
+
   if (!open) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-lg border bg-background shadow-xl">
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">设置</h2>
+          <h2 className="text-sm font-semibold">{t('settings.title')}</h2>
           <Button
             variant="ghost"
             size="icon"
             className="size-7"
             onClick={onClose}
-            aria-label="关闭设置面板"
-            title="关闭"
+            aria-label={t('settings.closePanel')}
+            title={t('settings.close')}
           >
             <X className="size-4" />
           </Button>
         </div>
 
         <div className="grid gap-4 px-4 py-4 sm:grid-cols-2">
-          <SettingField label="主题模式">
+          <div className="sm:col-span-2">
+            <SettingField label={t('settings.language')}>
+              <select
+                className="toolbar-select w-full"
+                value={language}
+                onChange={(e) => {
+                  void setLanguage(e.target.value as AppLanguage)
+                }}
+              >
+                <option value="zh-CN">简体中文</option>
+                <option value="en-US">English</option>
+              </select>
+            </SettingField>
+          </div>
+
+          <SettingField label={t('settings.themeMode')}>
             <select
               className="toolbar-select w-full"
               value={themeMode}
               onChange={(e) => onThemeModeChange(e.target.value as ThemeMode)}
             >
-              <option value="light">亮色</option>
-              <option value="dark">暗色</option>
-              <option value="system">跟随系统</option>
+              <option value="light">{t('appearance.light')}</option>
+              <option value="dark">{t('appearance.dark')}</option>
+              <option value="system">{t('appearance.system')}</option>
             </select>
           </SettingField>
 
-          <SettingField label="编辑器字体">
+          <SettingField label={t('settings.editorFont')}>
             <select
               className="toolbar-select w-full"
               value={editorFontFamily}
@@ -81,18 +102,18 @@ export function SettingsPanel({
             </select>
           </SettingField>
 
-          <SettingField label="预览字体">
+          <SettingField label={t('settings.previewFont')}>
             <select
               className="toolbar-select w-full"
               value={previewFontFamily}
               onChange={(e) => onPreviewFontFamilyChange(e.target.value as PreviewFontFamily)}
             >
-              <option value="sans">无衬线</option>
-              <option value="serif">衬线</option>
+              <option value="sans">{t('settings.sans')}</option>
+              <option value="serif">{t('settings.serif')}</option>
             </select>
           </SettingField>
 
-          <SettingField label="预览主题">
+          <SettingField label={t('settings.previewTheme')}>
             <select
               className="toolbar-select w-full"
               value={previewTheme}
@@ -105,10 +126,10 @@ export function SettingsPanel({
 
           <div className="sm:col-span-2">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="w-12">字号</span>
+              <span className="shrink-0">{t('settings.fontSize')}</span>
               <input
                 className="toolbar-range flex-1"
-                aria-label="调整字号"
+                aria-label={t('settings.adjustFontSize')}
                 type="range"
                 min={12}
                 max={24}

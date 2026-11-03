@@ -3,11 +3,25 @@ import { join, basename, extname } from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-channels'
+import { createAppMenuTemplate } from '../shared/i18n/menu-template'
+import { readLanguagePreference } from '../shared/i18n/read-language-preference'
+import { resolveLanguage } from '../shared/i18n/resolve-language'
+import { translate } from '../shared/i18n/translate'
+import type { AppLanguage } from '../shared/i18n/types'
 
 let mainWindow: BrowserWindow | null = null
 let isReadyToClose = false
 let recentFiles: string[] = []
+let currentLanguage: AppLanguage = 'en-US'
 const RECENT_FILES_LIMIT = 10
+
+function languageStorePath(): string {
+  return join(app.getPath('userData'), 'language.json')
+}
+
+function t(key: string, vars?: Record<string, string | number>): string {
+  return translate(currentLanguage, key, vars)
+}
 
 function recentFilesStorePath(): string {
   return join(app.getPath('userData'), 'recent-files.json')
@@ -94,113 +108,44 @@ function createWindow(): void {
   }
 }
 
-function buildMenu(): void {
-  const isMac = process.platform === 'darwin'
+async function loadLanguage(): Promise<void> {
+  let saved: string | null = null
+  try {
+    saved = readLanguagePreference(await readFile(languageStorePath(), 'utf-8'))
+  } catch {
+    saved = null
+  }
+  currentLanguage = resolveLanguage(saved, app.getLocale())
+}
 
-  if (!isMac) {
+async function persistLanguage(language: AppLanguage): Promise<void> {
+  await writeFile(languageStorePath(), JSON.stringify({ language }, null, 2), 'utf-8')
+}
+
+function buildMenu(): void {
+  if (process.platform !== 'darwin') {
     Menu.setApplicationMenu(null)
     return
   }
 
-  const template: Electron.MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: 'about' as const },
-              { type: 'separator' as const },
-              { role: 'services' as const },
-              { type: 'separator' as const },
-              { role: 'hide' as const },
-              { role: 'hideOthers' as const },
-              { role: 'unhide' as const },
-              { type: 'separator' as const },
-              { role: 'quit' as const }
-            ]
-          }
-        ]
-      : []),
-    {
-      label: '文件',
-      submenu: [
-        {
-          label: '新建',
-          accelerator: 'CmdOrCtrl+N',
-          click: () => mainWindow?.webContents.send(IPC.MENU_NEW_FILE)
-        },
-        {
-          label: '打开…',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => mainWindow?.webContents.send(IPC.MENU_OPEN_FILE)
-        },
-        {
-          label: '最近文件',
-          submenu:
-            recentFiles.length > 0
-              ? recentFiles.map((path) => ({
-                  label: basename(path),
-                  sublabel: path,
-                  click: () => mainWindow?.webContents.send(IPC.MENU_OPEN_RECENT, path)
-                }))
-              : [{ label: '暂无最近文件', enabled: false }]
-        },
-        { type: 'separator' },
-        {
-          label: '保存',
-          accelerator: 'CmdOrCtrl+S',
-          click: () => mainWindow?.webContents.send(IPC.MENU_SAVE)
-        },
-        {
-          label: '另存为…',
-          accelerator: 'CmdOrCtrl+Shift+S',
-          click: () => mainWindow?.webContents.send(IPC.MENU_SAVE_AS)
-        },
-        { type: 'separator' },
-        {
-          label: '导出 HTML…',
-          accelerator: 'CmdOrCtrl+Shift+E',
-          click: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_HTML)
-        },
-        {
-          label: '导出 PDF…',
-          accelerator: 'CmdOrCtrl+Shift+P',
-          click: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_PDF)
-        },
-        { type: 'separator' },
-        isMac ? { role: 'close' as const } : { role: 'quit' as const }
-      ]
-    },
-    {
-      label: '编辑',
-      submenu: [
-        { role: 'undo' as const, label: '撤销' },
-        { role: 'redo' as const, label: '重做' },
-        { type: 'separator' },
-        { role: 'cut' as const, label: '剪切' },
-        { role: 'copy' as const, label: '复制' },
-        { role: 'paste' as const, label: '粘贴' },
-        { role: 'selectAll' as const, label: '全选' }
-      ]
-    },
-    {
-      label: '视图',
-      submenu: [
-        { role: 'reload' as const, label: '重新加载' },
-        { role: 'forceReload' as const, label: '强制重新加载' },
-        { type: 'separator' },
-        { role: 'resetZoom' as const, label: '重置缩放' },
-        { role: 'zoomIn' as const, label: '放大' },
-        { role: 'zoomOut' as const, label: '缩小' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' as const, label: '切换全屏' },
-        ...(is.dev ? [{ role: 'toggleDevTools' as const, label: '开发者工具' }] : [])
-      ]
+  const template = createAppMenuTemplate({
+    language: currentLanguage,
+    isMac: true,
+    isDev: is.dev,
+    appName: app.name,
+    recentFiles: recentFiles.map((path) => ({ path, label: basename(path) })),
+    actions: {
+      newFile: () => mainWindow?.webContents.send(IPC.MENU_NEW_FILE),
+      openFile: () => mainWindow?.webContents.send(IPC.MENU_OPEN_FILE),
+      openRecent: (path) => mainWindow?.webContents.send(IPC.MENU_OPEN_RECENT, path),
+      save: () => mainWindow?.webContents.send(IPC.MENU_SAVE),
+      saveAs: () => mainWindow?.webContents.send(IPC.MENU_SAVE_AS),
+      exportHtml: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_HTML),
+      exportPdf: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_PDF)
     }
-  ]
+  })
 
-  const menu = Menu.buildFromTemplate(template)
-  Menu.setApplicationMenu(menu)
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template as Electron.MenuItemConstructorOptions[]))
 }
 
 // ─── IPC Handlers ───────────────────────────────────────────────
@@ -208,10 +153,10 @@ function buildMenu(): void {
 ipcMain.handle(IPC.FILE_OPEN_DIALOG, async () => {
   if (!mainWindow) return null
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-    title: '打开文件',
+    title: t('dialog.openFile'),
     filters: [
-      { name: 'Markdown', extensions: ['md', 'markdown', 'txt'] },
-      { name: '所有文件', extensions: ['*'] }
+      { name: t('dialog.markdown'), extensions: ['md', 'markdown', 'txt'] },
+      { name: t('dialog.allFiles'), extensions: ['*'] }
     ],
     properties: ['openFile']
   })
@@ -221,7 +166,7 @@ ipcMain.handle(IPC.FILE_OPEN_DIALOG, async () => {
     await recordRecentFile(filePaths[0])
     return { path: filePaths[0], content }
   } catch (err) {
-    dialog.showErrorBox('打开失败', String(err))
+    dialog.showErrorBox(t('dialog.openFailed'), String(err))
     return null
   }
 })
@@ -232,7 +177,7 @@ ipcMain.handle(IPC.FILE_OPEN_PATH, async (_e, { path }: { path: string }) => {
     await recordRecentFile(path)
     return { path, content }
   } catch (err) {
-    dialog.showErrorBox('打开失败', String(err))
+    dialog.showErrorBox(t('dialog.openFailed'), String(err))
     return null
   }
 })
@@ -243,7 +188,7 @@ ipcMain.handle(IPC.FILE_SAVE, async (_e, { path, content }: { path: string; cont
     await recordRecentFile(path)
     return { success: true }
   } catch (err) {
-    dialog.showErrorBox('保存失败', String(err))
+    dialog.showErrorBox(t('dialog.saveFailed'), String(err))
     return { success: false }
   }
 })
@@ -251,10 +196,10 @@ ipcMain.handle(IPC.FILE_SAVE, async (_e, { path, content }: { path: string; cont
 ipcMain.handle(IPC.FILE_SAVE_AS, async (_e, { content }: { content: string }) => {
   if (!mainWindow) return null
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: '另存为',
+    title: t('dialog.saveAs'),
     filters: [
-      { name: 'Markdown', extensions: ['md'] },
-      { name: '所有文件', extensions: ['*'] }
+      { name: t('dialog.markdown'), extensions: ['md'] },
+      { name: t('dialog.allFiles'), extensions: ['*'] }
     ]
   })
   if (canceled || !filePath) return null
@@ -263,7 +208,7 @@ ipcMain.handle(IPC.FILE_SAVE_AS, async (_e, { content }: { content: string }) =>
     await recordRecentFile(filePath)
     return { path: filePath }
   } catch (err) {
-    dialog.showErrorBox('保存失败', String(err))
+    dialog.showErrorBox(t('dialog.saveFailed'), String(err))
     return null
   }
 })
@@ -274,11 +219,11 @@ ipcMain.handle(
     if (!mainWindow) return null
     const defaultName = `${getExportBaseName(fileName)}.html`
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: '导出 HTML',
+      title: t('dialog.exportHtml'),
       defaultPath: defaultName,
       filters: [
-        { name: 'HTML 文件', extensions: ['html'] },
-        { name: '所有文件', extensions: ['*'] }
+        { name: t('dialog.htmlFiles'), extensions: ['html'] },
+        { name: t('dialog.allFiles'), extensions: ['*'] }
       ]
     })
     if (canceled || !filePath) return null
@@ -286,7 +231,7 @@ ipcMain.handle(
       await writeFile(filePath, html, 'utf-8')
       return { path: filePath }
     } catch (err) {
-      dialog.showErrorBox('导出 HTML 失败', String(err))
+      dialog.showErrorBox(t('dialog.exportHtmlFailed'), String(err))
       return null
     }
   }
@@ -298,11 +243,11 @@ ipcMain.handle(
     if (!mainWindow) return null
     const defaultName = `${getExportBaseName(fileName)}.pdf`
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: '导出 PDF',
+      title: t('dialog.exportPdf'),
       defaultPath: defaultName,
       filters: [
-        { name: 'PDF 文件', extensions: ['pdf'] },
-        { name: '所有文件', extensions: ['*'] }
+        { name: t('dialog.pdfFiles'), extensions: ['pdf'] },
+        { name: t('dialog.allFiles'), extensions: ['*'] }
       ]
     })
     if (canceled || !filePath) return null
@@ -325,7 +270,7 @@ ipcMain.handle(
       await writeFile(filePath, pdfData)
       return { path: filePath }
     } catch (err) {
-      dialog.showErrorBox('导出 PDF 失败', String(err))
+      dialog.showErrorBox(t('dialog.exportPdfFailed'), String(err))
       return null
     } finally {
       pdfWindow?.destroy()
@@ -354,6 +299,22 @@ ipcMain.on(IPC.THEME_SET, (_e, theme: 'light' | 'dark' | 'system') => {
   nativeTheme.themeSource = theme === 'system' ? 'system' : theme
 })
 
+ipcMain.on(IPC.LANGUAGE_GET, (event) => {
+  event.returnValue = currentLanguage
+})
+
+ipcMain.handle(IPC.LANGUAGE_SET, async (_e, language: unknown) => {
+  const next = resolveLanguage(typeof language === 'string' ? language : null, currentLanguage)
+  currentLanguage = next
+  try {
+    await persistLanguage(next)
+  } catch {
+    // 语言偏好写入失败时仍保持本次会话的选择
+  }
+  buildMenu()
+  return next
+})
+
 // ─── App Lifecycle ───────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -370,6 +331,7 @@ app.whenReady().then(async () => {
     )
   })
 
+  await loadLanguage()
   await loadRecentFiles()
   buildMenu()
   createWindow()

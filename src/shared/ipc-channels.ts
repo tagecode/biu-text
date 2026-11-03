@@ -29,4 +29,8 @@ export const IPC = {
   THEME_GET: 'theme:get',
   THEME_SET: 'theme:set',
   THEME_CHANGED: 'theme:changed',
+
+  // 界面语言
+  LANGUAGE_GET: 'language:get',
+  LANGUAGE_SET: 'language:set'
 } as const

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, MutableRefObject } from 'react'
+import { useCallback, useRef, MutableRefObject } from 'react'
+import i18n from '@/i18n'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
@@ -38,10 +39,10 @@ function wrapSelection(view: EditorView, before: string, after = before) {
 }
 
 /** 插入链接模板 */
-function insertLink(view: EditorView) {
+function insertLink(view: EditorView, linkText: string) {
   const { from, to } = view.state.selection.main
   const selected = view.state.sliceDoc(from, to)
-  const text = selected || '链接文字'
+  const text = selected || linkText
   const insert = `[${text}](url)`
   view.dispatch({
     changes: { from, to, insert },
@@ -92,7 +93,10 @@ export function Editor({
         },
         {
           key: 'Mod-k',
-          run: (view) => { insertLink(view); return true }
+          run: (view) => {
+            insertLink(view, i18n.t('editor.linkText'))
+            return true
+          }
         }
       ])
     )

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
+import type { AppLanguage } from '../shared/i18n/types'
 
 type UnsubFn = () => void
 
@@ -79,6 +80,12 @@ const themeAPI = {
   }
 }
 
+const languageAPI = {
+  getSync: (): AppLanguage => ipcRenderer.sendSync(IPC.LANGUAGE_GET),
+
+  set: (language: AppLanguage): Promise<AppLanguage> => ipcRenderer.invoke(IPC.LANGUAGE_SET, language)
+}
+
 const windowAPI = {
   platform: process.platform,
 
@@ -106,14 +113,17 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('fileAPI', fileAPI)
     contextBridge.exposeInMainWorld('themeAPI', themeAPI)
     contextBridge.exposeInMainWorld('windowAPI', windowAPI)
+    contextBridge.exposeInMainWorld('languageAPI', languageAPI)
   } catch (error) {
     console.error(error)
   }
 } else {
-  // @ts-ignore
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
   window.fileAPI = fileAPI
-  // @ts-ignore
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
   window.themeAPI = themeAPI
-  // @ts-ignore
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
   window.windowAPI = windowAPI
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
+  window.languageAPI = languageAPI
 }

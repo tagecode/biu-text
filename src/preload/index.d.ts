@@ -1,3 +1,5 @@
+import type { AppLanguage } from '../shared/i18n/types'
+
 export {}
 
 type UnsubFn = () => void
@@ -32,10 +34,16 @@ interface WindowAPI {
   cancelClose: () => void
 }
 
+interface LanguageAPI {
+  getSync: () => AppLanguage
+  set: (language: AppLanguage) => Promise<AppLanguage>
+}
+
 declare global {
   interface Window {
     fileAPI: FileAPI
     themeAPI: ThemeAPI
     windowAPI: WindowAPI
+    languageAPI: LanguageAPI
   }
 }

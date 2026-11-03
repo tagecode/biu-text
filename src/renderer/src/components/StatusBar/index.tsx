@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { PreviewTheme } from '@/hooks/useAppearanceSettings'
@@ -25,8 +26,10 @@ export function StatusBar({
   fontSize,
   onCycleThemeMode
 }: StatusBarProps) {
-  const themeModeLabel =
-    themeMode === 'system' ? '跟随系统' : themeMode === 'dark' ? '暗色' : '亮色'
+  const { t } = useTranslation()
+  const themeModeLabel = t(
+    themeMode === 'system' ? 'appearance.system' : themeMode === 'dark' ? 'appearance.dark' : 'appearance.light'
+  )
 
   return (
     <div
@@ -34,16 +37,16 @@ export function StatusBar({
         bg-muted/40 text-[11px] text-muted-foreground select-none"
     >
       {/* 光标位置 */}
-      <StatusItem label={`行 ${line}, 列 ${col}`} />
+      <StatusItem label={t('status.lineCol', { line, col })} />
 
       <Divider />
 
       {/* 字数统计 */}
-      <StatusItem label={`${wordCount.words} 词`} />
+      <StatusItem label={t('status.words', { count: wordCount.words })} />
       <Divider />
-      <StatusItem label={`${wordCount.chars} 字符`} />
+      <StatusItem label={t('status.characters', { count: wordCount.chars })} />
       <Divider />
-      <StatusItem label={`${wordCount.lines} 行`} />
+      <StatusItem label={t('status.lines', { count: wordCount.lines })} />
 
       {/* 右侧固定信息 */}
       <div className="ml-auto flex items-center gap-1">
@@ -58,8 +61,8 @@ export function StatusBar({
           size="icon"
           className="size-[18px] rounded-sm text-muted-foreground hover:text-foreground"
           onClick={onCycleThemeMode}
-          aria-label="切换主题模式"
-          title={`当前: ${themeModeLabel}`}
+          aria-label={t('status.cycleTheme')}
+          title={t('status.currentTheme', { theme: themeModeLabel })}
         >
           {themeMode === 'system' ? (
             <Monitor className="size-3" />

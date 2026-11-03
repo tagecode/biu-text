@@ -12,10 +12,12 @@ import {
   Code,
   Link
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import type { ThemeMode } from '@/hooks/useTheme'
 import type { WordCountResult } from '@/hooks/useWordCount'
+import { formatShortcut } from '@shared/i18n/format-shortcut'
 
 interface ToolbarProps {
   themeMode: ThemeMode
@@ -53,6 +55,14 @@ export function Toolbar({
   onOpenSettings,
   wordCount
 }: ToolbarProps) {
+  const { t } = useTranslation()
+  const platform = window.windowAPI?.platform ?? 'darwin'
+  const shortcut = (key: string, shift = false) => formatShortcut(platform, key, shift)
+  const themeLabel = t(
+    themeMode === 'system' ? 'appearance.system' : themeMode === 'dark' ? 'appearance.dark' : 'appearance.light'
+  )
+  const previewLabel = previewVisible ? t('toolbar.hidePreview') : t('toolbar.showPreview')
+
   return (
     <div
       className={`drag-region flex items-center gap-0.5 h-11 shrink-0 border-b bg-background select-none ${isMac ? 'pl-[80px] pr-2' : 'px-2'}`}
@@ -63,8 +73,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onNewFile}
-        aria-label="新建文件"
-        title="新建 (⌘N)"
+        aria-label={t('toolbar.new')}
+        title={`${t('toolbar.new')} (${shortcut('N')})`}
       >
         <FilePlus className="size-3.5" />
       </Button>
@@ -73,8 +83,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onOpenFile}
-        aria-label="打开文件"
-        title="打开 (⌘O)"
+        aria-label={t('toolbar.open')}
+        title={`${t('toolbar.open')} (${shortcut('O')})`}
       >
         <FolderOpen className="size-3.5" />
       </Button>
@@ -83,8 +93,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onSaveFile}
-        aria-label="保存文件"
-        title="保存 (⌘S)"
+        aria-label={t('toolbar.save')}
+        title={`${t('toolbar.save')} (${shortcut('S')})`}
       >
         <Save className="size-3.5" />
       </Button>
@@ -93,8 +103,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onExportHtml}
-        aria-label="导出 HTML"
-        title="导出 HTML (⌘⇧E)"
+        aria-label={t('toolbar.exportHtml')}
+        title={`${t('toolbar.exportHtml')} (${shortcut('E', true)})`}
       >
         <FileText className="size-3.5" />
       </Button>
@@ -103,8 +113,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onExportPdf}
-        aria-label="导出 PDF"
-        title="导出 PDF (⌘⇧P)"
+        aria-label={t('toolbar.exportPdf')}
+        title={`${t('toolbar.exportPdf')} (${shortcut('P', true)})`}
       >
         <Download className="size-3.5" />
       </Button>
@@ -113,8 +123,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onTogglePreviewVisible}
-        aria-label={previewVisible ? '隐藏预览区' : '显示预览区'}
-        title={previewVisible ? '隐藏预览区' : '显示预览区'}
+        aria-label={previewLabel}
+        title={previewLabel}
       >
         {previewVisible ? <PanelRightClose className="size-3.5" /> : <PanelRightOpen className="size-3.5" />}
       </Button>
@@ -123,8 +133,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onOpenSettings}
-        aria-label="打开设置面板"
-        title={`设置（当前：${themeMode === 'system' ? '跟随系统' : themeMode === 'dark' ? '暗色' : '亮色'}）`}
+        aria-label={t('toolbar.openSettings')}
+        title={t('toolbar.settingsCurrent', { theme: themeLabel })}
       >
         <Settings className="size-3.5" />
       </Button>
@@ -137,8 +147,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onBold}
-        aria-label="粗体"
-        title="粗体 (⌘B)"
+        aria-label={t('toolbar.bold')}
+        title={`${t('toolbar.bold')} (${shortcut('B')})`}
       >
         <Bold className="size-3.5" />
       </Button>
@@ -147,8 +157,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onItalic}
-        aria-label="斜体"
-        title="斜体 (⌘I)"
+        aria-label={t('toolbar.italic')}
+        title={`${t('toolbar.italic')} (${shortcut('I')})`}
       >
         <Italic className="size-3.5" />
       </Button>
@@ -157,8 +167,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onCode}
-        aria-label="行内代码"
-        title="代码 (⌘`)"
+        aria-label={t('toolbar.code')}
+        title={`${t('toolbar.code')} (${shortcut('`')})`}
       >
         <Code className="size-3.5" />
       </Button>
@@ -167,8 +177,8 @@ export function Toolbar({
         size="icon"
         className="no-drag-region size-7"
         onClick={onLink}
-        aria-label="插入链接"
-        title="链接 (⌘K)"
+        aria-label={t('toolbar.link')}
+        title={`${t('toolbar.link')} (${shortcut('K')})`}
       >
         <Link className="size-3.5" />
       </Button>
@@ -176,7 +186,7 @@ export function Toolbar({
       {/* 右侧：字数统计摘要 */}
       <div className="no-drag-region ml-auto">
         <span className="text-xs text-muted-foreground tabular-nums">
-          {wordCount.words} 词 &middot; {wordCount.chars} 字符
+          {t('toolbar.wordSummary', { words: wordCount.words, chars: wordCount.chars })}
         </span>
       </div>
     </div>

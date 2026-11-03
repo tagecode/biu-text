@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const WELCOME_CONTENT = `# 欢迎使用 BiuText
 
@@ -48,6 +49,7 @@ export interface FileState {
 }
 
 export function useFile() {
+  const { t } = useTranslation()
   const [content, setContentState] = useState(WELCOME_CONTENT)
   const [filePath, setFilePath] = useState<string | null>(null)
   const [savedContent, setSavedContent] = useState(WELCOME_CONTENT)
@@ -147,7 +149,7 @@ export function useFile() {
         window.windowAPI.confirmClose()
         return
       }
-      const confirmed = window.confirm('文件有未保存的更改，确定要关闭吗？')
+      const confirmed = window.confirm(t('dialog.unsavedClose'))
       if (confirmed) {
         window.windowAPI.confirmClose()
       } else {
@@ -155,7 +157,7 @@ export function useFile() {
       }
     })
     return unsub
-  }, [])
+  }, [t])
 
   // 更新窗口标题
   useEffect(() => {
@@ -164,11 +166,11 @@ export function useFile() {
       const fileName = filePath.replaceAll('\\', '/').split('/').pop() ?? filePath
       title = isDirty ? `${fileName} · BiuText` : `${fileName} - BiuText`
     } else if (isDirty) {
-      title = '未命名 · BiuText'
+      title = `${t('app.untitled')} · BiuText`
     }
     window.windowAPI.setTitle(title)
     document.title = title
-  }, [filePath, isDirty])
+  }, [filePath, isDirty, t])
 
   return {
     content,

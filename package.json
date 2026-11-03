@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web"
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "vitest run"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",
@@ -37,6 +38,7 @@
     "dompurify": "^3.3.2",
     "github-markdown-css": "^5.9.0",
     "highlight.js": "^11.11.1",
+    "i18next": "^26.7.1",
     "katex": "^0.16.38",
     "lucide-react": "^0.511.0",
     "markdown-it": "^14.1.1",
@@ -45,6 +47,7 @@
     "markdown-it-task-lists": "^2.1.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-i18next": "^17.1.12",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
@@ -69,6 +72,7 @@
     "tailwindcss": "^4.1.6",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
+    "vitest": "^5.1.0",
     "wait-on": "^9.0.4"
   },
   "build": {

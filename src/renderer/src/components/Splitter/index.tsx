@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface SplitterProps {
   /** 拖拽时回调，参数为水平位移像素（正值向右，负值向左） */
@@ -8,6 +9,7 @@ interface SplitterProps {
 }
 
 export function Splitter({ onDrag, onReset }: SplitterProps) {
+  const { t } = useTranslation()
   const isDragging = useRef(false)
   const lastX = useRef(0)
 
@@ -37,7 +39,7 @@ export function Splitter({ onDrag, onReset }: SplitterProps) {
   return (
     <div
       role="separator"
-      aria-label="拖拽调整面板宽度，双击恢复 50:50"
+      aria-label={t('splitter.resize')}
       className="relative w-1 shrink-0 bg-border cursor-col-resize select-none group
         hover:bg-primary/40 active:bg-primary/60 transition-colors duration-150"
       onPointerDown={handlePointerDown}
