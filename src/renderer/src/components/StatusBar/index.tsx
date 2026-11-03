@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import type { PreviewTheme } from '@/hooks/useAppearanceSettings'
 import type { Theme, ThemeMode } from '@/hooks/useTheme'
 import type { WordCountResult } from '@/hooks/useWordCount'
+import { useAppLanguage } from '@/hooks/useAppLanguage'
+import { LANGUAGE_NAMES } from '@shared/i18n/types'
 
 interface StatusBarProps {
   line: number
@@ -27,6 +29,7 @@ export function StatusBar({
   onCycleThemeMode
 }: StatusBarProps) {
   const { t } = useTranslation()
+  const { language } = useAppLanguage()
   const themeModeLabel = t(
     themeMode === 'system' ? 'appearance.system' : themeMode === 'dark' ? 'appearance.dark' : 'appearance.light'
   )
@@ -51,6 +54,8 @@ export function StatusBar({
       {/* 右侧固定信息 */}
       <div className="ml-auto flex items-center gap-1">
         <StatusItem label="UTF-8" />
+        <Divider />
+        <StatusItem label={LANGUAGE_NAMES[language]} />
         <Divider />
         <StatusItem label={`${fontSize}px`} />
         <Divider />

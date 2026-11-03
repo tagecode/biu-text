@@ -16,6 +16,7 @@ const language = initialLanguage()
 void i18n.use(initReactI18next).init({
   resources: {
     'zh-CN': { translation: messages['zh-CN'] },
+    'zh-TW': { translation: messages['zh-TW'] },
     'en-US': { translation: messages['en-US'] }
   },
   lng: language,

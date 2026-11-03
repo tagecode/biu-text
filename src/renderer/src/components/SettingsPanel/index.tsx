@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppLanguage } from '@/hooks/useAppLanguage'
-import type { AppLanguage } from '@shared/i18n/types'
+import { LANGUAGE_NAMES, type AppLanguage } from '@shared/i18n/types'
 import type {
   EditorFontFamily,
   PreviewFontFamily,
@@ -72,8 +72,9 @@ export function SettingsPanel({
                   void setLanguage(e.target.value as AppLanguage)
                 }}
               >
-                <option value="zh-CN">简体中文</option>
-                <option value="en-US">English</option>
+                <option value="zh-CN">{LANGUAGE_NAMES['zh-CN']}</option>
+                <option value="zh-TW">{LANGUAGE_NAMES['zh-TW']}</option>
+                <option value="en-US">{LANGUAGE_NAMES['en-US']}</option>
               </select>
             </SettingField>
           </div>

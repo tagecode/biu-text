@@ -1,46 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
+import { resolveLanguage } from '@shared/i18n/resolve-language'
+import { translate } from '@shared/i18n/translate'
+import type { AppLanguage } from '@shared/i18n/types'
 
-const WELCOME_CONTENT = `# 欢迎使用 BiuText
-
-BiuText 是一款轻量级的跨平台 Markdown 编辑器，采用经典的**分栏布局**。
-
-## 快速开始
-
-- **左侧**为 Markdown 源码编辑区（基于 CodeMirror 6）
-- **右侧**为实时渲染预览区（基于 markdown-it）
-- 拖动中间**分隔条**可自由调整面板宽度
-
-## 格式快捷键
-
-| 操作 | 快捷键 |
-|------|--------|
-| 粗体 | \`Cmd/Ctrl + B\` |
-| 斜体 | \`Cmd/Ctrl + I\` |
-| 行内代码 | \`Cmd/Ctrl + \`\` |
-| 链接 | \`Cmd/Ctrl + K\` |
-| 保存 | \`Cmd/Ctrl + S\` |
-
-## 支持的语法
-
-**粗体**、*斜体*、~~删除线~~、\`行内代码\`
-
-> 引用块：用于引用重要内容
-
-\`\`\`typescript
-// 代码块支持语法高亮
-function greet(name: string): string {
-  return \`Hello, \${name}!\`
+function welcomeDocument(language: AppLanguage): string {
+  return translate(language, 'welcome.document')
 }
-\`\`\`
 
-- [x] 任务列表（已完成）
-- [ ] 任务列表（未完成）
-
----
-
-*开始编辑此文件，或通过菜单打开一个 .md 文件*
-`
+function languageFrom(code: string | undefined): AppLanguage {
+  return resolveLanguage(code, code)
+}
 
 export interface FileState {
   content: string
@@ -50,9 +21,11 @@ export interface FileState {
 
 export function useFile() {
   const { t } = useTranslation()
-  const [content, setContentState] = useState(WELCOME_CONTENT)
+  const initialWelcome = welcomeDocument(languageFrom(i18n.language))
+  const [content, setContentState] = useState(initialWelcome)
   const [filePath, setFilePath] = useState<string | null>(null)
-  const [savedContent, setSavedContent] = useState(WELCOME_CONTENT)
+  const [savedContent, setSavedContent] = useState(initialWelcome)
+  const welcomeRef = useRef(initialWelcome)
 
   const isDirty = content !== savedContent
 
@@ -61,6 +34,23 @@ export function useFile() {
   useEffect(() => {
     stateRef.current = { content, filePath, isDirty }
   }, [content, filePath, isDirty])
+
+  useEffect(() => {
+    const onLanguageChanged = (code: string) => {
+      const next = welcomeDocument(languageFrom(code))
+      const previous = welcomeRef.current
+      const state = stateRef.current
+      if (state.filePath === null && !state.isDirty && state.content === previous) {
+        setContentState(next)
+        setSavedContent(next)
+        welcomeRef.current = next
+      }
+    }
+    i18n.on('languageChanged', onLanguageChanged)
+    return () => {
+      i18n.off('languageChanged', onLanguageChanged)
+    }
+  }, [])
 
   const setContent = useCallback((val: string) => {
     setContentState(val)

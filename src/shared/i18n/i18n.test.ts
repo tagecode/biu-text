@@ -42,12 +42,18 @@ describe('resolveLanguage', () => {
   it('uses a saved supported language over the system locale', () => {
     expect(resolveLanguage('en-US', 'zh-CN')).toBe('en-US')
     expect(resolveLanguage('zh-CN', 'en-US')).toBe('zh-CN')
+    expect(resolveLanguage('zh-TW', 'zh-CN')).toBe('zh-TW')
   })
 
-  it('uses simplified Chinese for Chinese system locales when nothing is saved', () => {
+  it('uses traditional Chinese for Taiwan, Hong Kong, and Macau locales', () => {
+    expect(resolveLanguage('', 'zh-TW')).toBe('zh-TW')
+    expect(resolveLanguage(null, 'zh-HK')).toBe('zh-TW')
+    expect(resolveLanguage(null, 'zh-MO')).toBe('zh-TW')
+    expect(resolveLanguage(null, 'zh-Hant')).toBe('zh-TW')
+  })
+
+  it('uses simplified Chinese for other Chinese locales', () => {
     expect(resolveLanguage(null, 'zh-CN')).toBe('zh-CN')
-    expect(resolveLanguage('', 'zh-TW')).toBe('zh-CN')
-    expect(resolveLanguage(null, 'zh-HK')).toBe('zh-CN')
     expect(resolveLanguage(null, 'zh')).toBe('zh-CN')
     expect(resolveLanguage('fr-FR', 'zh-Hans')).toBe('zh-CN')
   })
@@ -83,11 +89,17 @@ describe('translate', () => {
     expect(translateFrom(catalogs, 'en-US', 'missing.key')).toBe('missing.key')
   })
 
-  it('keeps zh-CN and en-US catalogs aligned and serves both languages', () => {
-    expect(flattenKeys(messages['zh-CN']).sort()).toEqual(flattenKeys(messages['en-US']).sort())
+  it('keeps every language catalog aligned and serves traditional Chinese', () => {
+    const zhCNKeys = flattenKeys(messages['zh-CN']).sort()
+    expect(flattenKeys(messages['en-US']).sort()).toEqual(zhCNKeys)
+    expect(flattenKeys(messages['zh-TW']).sort()).toEqual(zhCNKeys)
     expect(translate('zh-CN', 'menu.file')).toBe('文件')
+    expect(translate('zh-TW', 'menu.file')).toBe('檔案')
+    expect(translate('zh-TW', 'dialog.openFailed')).toBe('開啟失敗')
     expect(translate('en-US', 'menu.file')).toBe('File')
     expect(translate('zh-CN', 'dialog.unsavedClose')).toContain('未保存')
+    expect(translate('en-US', 'editor.placeholder')).toBe('Start writing…')
+    expect(translate('zh-TW', 'editor.placeholder')).toBe('開始書寫…')
     expect(translate('en-US', 'status.lineCol', { line: 2, col: 4 })).toBe('Ln 2, Col 4')
   })
 })

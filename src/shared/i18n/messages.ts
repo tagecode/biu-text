@@ -100,7 +100,50 @@ const zhCN = {
     document: 'BiuText 文档'
   },
   editor: {
-    linkText: '链接文字'
+    linkText: '链接文字',
+    placeholder: '开始书写…'
+  },
+  welcome: {
+    document: `# 欢迎使用 BiuText
+
+BiuText 是一款轻量级的跨平台 Markdown 编辑器，采用经典的**分栏布局**。
+
+## 快速开始
+
+- **左侧**为 Markdown 源码编辑区（基于 CodeMirror 6）
+- **右侧**为实时渲染预览区（基于 markdown-it）
+- 拖动中间**分隔条**可自由调整面板宽度
+
+## 格式快捷键
+
+| 操作 | 快捷键 |
+|------|--------|
+| 粗体 | \`Cmd/Ctrl + B\` |
+| 斜体 | \`Cmd/Ctrl + I\` |
+| 行内代码 | \`Cmd/Ctrl + \`\` |
+| 链接 | \`Cmd/Ctrl + K\` |
+| 保存 | \`Cmd/Ctrl + S\` |
+
+## 支持的语法
+
+**粗体**、*斜体*、~~删除线~~、\`行内代码\`
+
+> 引用块：用于引用重要内容
+
+\`\`\`typescript
+// 代码块支持语法高亮
+function greet(name: string): string {
+  return \`Hello, \${name}!\`
+}
+\`\`\`
+
+- [x] 任务列表（已完成）
+- [ ] 任务列表（未完成）
+
+---
+
+*开始编辑此文件，或通过菜单打开一个 .md 文件*
+`
   }
 } satisfies MessageTree
 
@@ -204,11 +247,202 @@ const enUS = {
     document: 'BiuText Document'
   },
   editor: {
-    linkText: 'link text'
+    linkText: 'link text',
+    placeholder: 'Start writing…'
+  },
+  welcome: {
+    document: `# Welcome to BiuText
+
+BiuText is a lightweight cross-platform Markdown editor with a classic **split view**.
+
+## Get started
+
+- The **left** side is the Markdown source editor (CodeMirror 6)
+- The **right** side is the live preview (markdown-it)
+- Drag the **divider** to resize the panels
+
+## Formatting shortcuts
+
+| Action | Shortcut |
+|------|--------|
+| Bold | \`Cmd/Ctrl + B\` |
+| Italic | \`Cmd/Ctrl + I\` |
+| Inline code | \`Cmd/Ctrl + \`\` |
+| Link | \`Cmd/Ctrl + K\` |
+| Save | \`Cmd/Ctrl + S\` |
+
+## Supported syntax
+
+**Bold**, *italic*, ~~strikethrough~~, \`inline code\`
+
+> Block quote for important notes
+
+\`\`\`typescript
+// Fenced code blocks are highlighted
+function greet(name: string): string {
+  return \`Hello, \${name}!\`
+}
+\`\`\`
+
+- [x] Task list (done)
+- [ ] Task list (open)
+
+---
+
+*Edit this file, or open a .md file from the menu*
+`
+  }
+} satisfies typeof zhCN
+
+const zhTW = {
+  menu: {
+    about: '關於 {{appName}}',
+    services: '服務',
+    hide: '隱藏 {{appName}}',
+    hideOthers: '隱藏其他',
+    showAll: '全部顯示',
+    quit: '結束 {{appName}}',
+    file: '檔案',
+    new: '新增',
+    open: '開啟…',
+    recentFiles: '最近使用的檔案',
+    noRecentFiles: '沒有最近使用的檔案',
+    save: '儲存',
+    saveAs: '另存新檔…',
+    exportHtml: '匯出 HTML…',
+    exportPdf: '匯出 PDF…',
+    close: '關閉',
+    edit: '編輯',
+    undo: '復原',
+    redo: '重做',
+    cut: '剪下',
+    copy: '複製',
+    paste: '貼上',
+    selectAll: '全選',
+    view: '檢視',
+    reload: '重新載入',
+    forceReload: '強制重新載入',
+    resetZoom: '重設縮放',
+    zoomIn: '放大',
+    zoomOut: '縮小',
+    toggleFullscreen: '切換全螢幕',
+    devTools: '開發者工具'
+  },
+  dialog: {
+    openFile: '開啟檔案',
+    openFailed: '開啟失敗',
+    saveFailed: '儲存失敗',
+    saveAs: '另存新檔',
+    exportHtml: '匯出 HTML',
+    exportHtmlFailed: '匯出 HTML 失敗',
+    exportPdf: '匯出 PDF',
+    exportPdfFailed: '匯出 PDF 失敗',
+    markdown: 'Markdown',
+    allFiles: '所有檔案',
+    htmlFiles: 'HTML 檔案',
+    pdfFiles: 'PDF 檔案',
+    unsavedClose: '檔案有尚未儲存的變更，確定要關閉嗎？'
+  },
+  toolbar: {
+    new: '新增檔案',
+    open: '開啟檔案',
+    save: '儲存檔案',
+    exportHtml: '匯出 HTML',
+    exportPdf: '匯出 PDF',
+    hidePreview: '隱藏預覽區',
+    showPreview: '顯示預覽區',
+    openSettings: '開啟設定面板',
+    settingsCurrent: '設定（目前：{{theme}}）',
+    bold: '粗體',
+    italic: '斜體',
+    code: '行內程式碼',
+    link: '插入連結',
+    wordSummary: '{{words}} 個詞 · {{chars}} 個字元'
+  },
+  settings: {
+    title: '設定',
+    close: '關閉',
+    closePanel: '關閉設定面板',
+    language: '語言',
+    themeMode: '主題模式',
+    editorFont: '編輯器字型',
+    previewFont: '預覽字型',
+    previewTheme: '預覽主題',
+    fontSize: '字級',
+    adjustFontSize: '調整字級',
+    sans: '無襯線',
+    serif: '襯線'
+  },
+  appearance: {
+    light: '淺色',
+    dark: '深色',
+    system: '跟隨系統'
+  },
+  status: {
+    lineCol: '行 {{line}}, 列 {{col}}',
+    words: '{{count}} 個詞',
+    characters: '{{count}} 個字元',
+    lines: '{{count}} 行',
+    cycleTheme: '切換主題模式',
+    currentTheme: '目前: {{theme}}'
+  },
+  splitter: {
+    resize: '拖曳調整面板寬度，按兩下還原 50:50'
+  },
+  app: {
+    untitled: '未命名',
+    document: 'BiuText 文件'
+  },
+  editor: {
+    linkText: '連結文字',
+    placeholder: '開始書寫…'
+  },
+  welcome: {
+    document: `# 歡迎使用 BiuText
+
+BiuText 是一款輕量的跨平台 Markdown 編輯器，採用經典的**分欄版面**。
+
+## 快速開始
+
+- **左側**是 Markdown 原始碼編輯區（基於 CodeMirror 6）
+- **右側**是即時預覽區（基於 markdown-it）
+- 拖曳中間的**分隔條**可調整面板寬度
+
+## 格式快速鍵
+
+| 操作 | 快速鍵 |
+|------|--------|
+| 粗體 | \`Cmd/Ctrl + B\` |
+| 斜體 | \`Cmd/Ctrl + I\` |
+| 行內程式碼 | \`Cmd/Ctrl + \`\` |
+| 連結 | \`Cmd/Ctrl + K\` |
+| 儲存 | \`Cmd/Ctrl + S\` |
+
+## 支援的語法
+
+**粗體**、*斜體*、~~刪除線~~、\`行內程式碼\`
+
+> 引用區塊：用來引用重要內容
+
+\`\`\`typescript
+// 程式碼區塊支援語法突顯
+function greet(name: string): string {
+  return \`Hello, \${name}!\`
+}
+\`\`\`
+
+- [x] 工作清單（已完成）
+- [ ] 工作清單（未完成）
+
+---
+
+*開始編輯此檔案，或從選單開啟一個 .md 檔案*
+`
   }
 } satisfies typeof zhCN
 
 export const messages: Record<AppLanguage, MessageTree> = {
   'zh-CN': zhCN,
+  'zh-TW': zhTW,
   'en-US': enUS
 }

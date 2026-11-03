@@ -3,7 +3,7 @@ import i18n from '@/i18n'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { keymap } from '@codemirror/view'
+import { keymap, placeholder } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
 import { search, openSearchPanel } from '@codemirror/search'
 import type { EditorFontFamily } from '@/hooks/useAppearanceSettings'
@@ -66,6 +66,7 @@ export function Editor({
   const extensions = [
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
+    placeholder(i18n.t('editor.placeholder')),
     // 显式启用搜索扩展，支持替换与正则/大小写/全词选项
     search({ top: true }),
     // 格式化快捷键（优先级最高，防止被浏览器默认行为覆盖）
