@@ -15,6 +15,11 @@ Thumbs.db
 *.swp
 *.swo
 
+# Local tooling
+.codegraph/
+.cursor/
+.spec-workflow/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
