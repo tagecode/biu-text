@@ -39,11 +39,17 @@ interface LanguageAPI {
   set: (language: AppLanguage) => Promise<AppLanguage>
 }
 
+interface LoginAPI {
+  get: () => Promise<boolean>
+  set: (openAtLogin: boolean) => Promise<boolean>
+}
+
 declare global {
   interface Window {
     fileAPI: FileAPI
     themeAPI: ThemeAPI
     windowAPI: WindowAPI
     languageAPI: LanguageAPI
+    loginAPI: LoginAPI
   }
 }

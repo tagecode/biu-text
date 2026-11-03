@@ -10,6 +10,7 @@ import { SettingsPanel } from '@/components/SettingsPanel'
 import { useFile } from '@/hooks/useFile'
 import { useTheme } from '@/hooks/useTheme'
 import { useAppearanceSettings } from '@/hooks/useAppearanceSettings'
+import { useLoginItem } from '@/hooks/useLoginItem'
 import { useWordCount } from '@/hooks/useWordCount'
 import { buildExportHtmlDocument } from '@/lib/export-document'
 
@@ -74,18 +75,28 @@ function readStoredPreviewVisible(): boolean {
 // ─── App ─────────────────────────────────────────────────────────
 function App() {
   const { t } = useTranslation()
-  const { content, filePath, setContent, newFile, openFile, saveFile, exportHtml, exportPdf } = useFile()
+  const { content, filePath, setContent, newFile, openFile, saveFile, autoSave, exportHtml, exportPdf } =
+    useFile()
   const { theme, themeMode, setThemeMode, cycleThemeMode } = useTheme()
   const {
     editorFontFamily,
     previewFontFamily,
     fontSize,
     previewTheme,
+    tabWidth,
+    lineHeight,
+    showLineNumbers,
+    autoSaveSeconds,
     setEditorFontFamily,
     setPreviewFontFamily,
     setFontSize,
-    setPreviewTheme
+    setPreviewTheme,
+    setTabWidth,
+    setLineHeight,
+    setShowLineNumbers,
+    setAutoSaveSeconds
   } = useAppearanceSettings()
+  const { openAtLogin, setOpenAtLogin } = useLoginItem()
   const wordCount = useWordCount(content)
 
   const editorViewRef = useRef<EditorView | null>(null)
@@ -113,6 +124,14 @@ function App() {
     setLeftPercent(DEFAULT_LEFT_PCT)
     localStorage.setItem(SPLITTER_STORAGE_KEY, String(DEFAULT_LEFT_PCT))
   }, [])
+
+  useEffect(() => {
+    if (autoSaveSeconds <= 0) return
+    const timer = window.setInterval(() => {
+      void autoSave()
+    }, autoSaveSeconds * 1000)
+    return () => window.clearInterval(timer)
+  }, [autoSaveSeconds, autoSave])
 
   const handleTogglePreviewVisible = useCallback(() => {
     setPreviewVisible((prev) => {
@@ -216,6 +235,9 @@ function App() {
             theme={theme}
             fontFamily={editorFontFamily}
             fontSize={fontSize}
+            tabWidth={tabWidth}
+            lineHeight={lineHeight}
+            showLineNumbers={showLineNumbers}
             editorViewRef={editorViewRef}
             previewScrollRef={previewScrollRef}
             onChange={setContent}
@@ -260,12 +282,24 @@ function App() {
         previewFontFamily={previewFontFamily}
         fontSize={fontSize}
         previewTheme={previewTheme}
+        tabWidth={tabWidth}
+        lineHeight={lineHeight}
+        showLineNumbers={showLineNumbers}
+        autoSaveSeconds={autoSaveSeconds}
+        openAtLogin={openAtLogin}
         onClose={() => setSettingsOpen(false)}
         onThemeModeChange={setThemeMode}
         onEditorFontFamilyChange={setEditorFontFamily}
         onPreviewFontFamilyChange={setPreviewFontFamily}
         onFontSizeChange={setFontSize}
         onPreviewThemeChange={setPreviewTheme}
+        onTabWidthChange={setTabWidth}
+        onLineHeightChange={setLineHeight}
+        onShowLineNumbersChange={setShowLineNumbers}
+        onAutoSaveSecondsChange={setAutoSaveSeconds}
+        onOpenAtLoginChange={(value) => {
+          void setOpenAtLogin(value)
+        }}
       />
     </div>
   )

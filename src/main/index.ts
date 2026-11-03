@@ -303,6 +303,24 @@ ipcMain.on(IPC.LANGUAGE_GET, (event) => {
   event.returnValue = currentLanguage
 })
 
+ipcMain.handle(IPC.LOGIN_GET, () => {
+  try {
+    return app.getLoginItemSettings().openAtLogin
+  } catch {
+    return false
+  }
+})
+
+ipcMain.handle(IPC.LOGIN_SET, (_e, openAtLogin: unknown) => {
+  const enabled = openAtLogin === true
+  try {
+    app.setLoginItemSettings({ openAtLogin: enabled })
+    return app.getLoginItemSettings().openAtLogin
+  } catch {
+    return false
+  }
+})
+
 ipcMain.handle(IPC.LANGUAGE_SET, async (_e, language: unknown) => {
   const next = resolveLanguage(typeof language === 'string' ? language : null, currentLanguage)
   currentLanguage = next

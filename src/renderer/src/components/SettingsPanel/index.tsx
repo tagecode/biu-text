@@ -9,6 +9,7 @@ import type {
   PreviewFontFamily,
   PreviewTheme
 } from '@/hooks/useAppearanceSettings'
+import { AUTO_SAVE_SECONDS, TAB_WIDTHS, type AutoSaveSeconds, type TabWidth } from '@shared/editor-preferences'
 import type { ThemeMode } from '@/hooks/useTheme'
 
 interface SettingsPanelProps {
@@ -18,12 +19,22 @@ interface SettingsPanelProps {
   previewFontFamily: PreviewFontFamily
   fontSize: number
   previewTheme: PreviewTheme
+  tabWidth: TabWidth
+  lineHeight: number
+  showLineNumbers: boolean
+  autoSaveSeconds: AutoSaveSeconds
+  openAtLogin: boolean
   onClose: () => void
   onThemeModeChange: (value: ThemeMode) => void
   onEditorFontFamilyChange: (value: EditorFontFamily) => void
   onPreviewFontFamilyChange: (value: PreviewFontFamily) => void
   onFontSizeChange: (value: number) => void
   onPreviewThemeChange: (value: PreviewTheme) => void
+  onTabWidthChange: (value: TabWidth) => void
+  onLineHeightChange: (value: number) => void
+  onShowLineNumbersChange: (value: boolean) => void
+  onAutoSaveSecondsChange: (value: AutoSaveSeconds) => void
+  onOpenAtLoginChange: (value: boolean) => void
 }
 
 export function SettingsPanel({
@@ -33,12 +44,22 @@ export function SettingsPanel({
   previewFontFamily,
   fontSize,
   previewTheme,
+  tabWidth,
+  lineHeight,
+  showLineNumbers,
+  autoSaveSeconds,
+  openAtLogin,
   onClose,
   onThemeModeChange,
   onEditorFontFamilyChange,
   onPreviewFontFamilyChange,
   onFontSizeChange,
-  onPreviewThemeChange
+  onPreviewThemeChange,
+  onTabWidthChange,
+  onLineHeightChange,
+  onShowLineNumbersChange,
+  onAutoSaveSecondsChange,
+  onOpenAtLoginChange
 }: SettingsPanelProps) {
   const { t } = useTranslation()
   const { language, setLanguage } = useAppLanguage()
@@ -62,7 +83,8 @@ export function SettingsPanel({
           </Button>
         </div>
 
-        <div className="grid gap-4 px-4 py-4 sm:grid-cols-2">
+        <div className="grid max-h-[70vh] gap-4 overflow-y-auto px-4 py-4 sm:grid-cols-2">
+          <h3 className="sm:col-span-2 text-xs font-medium text-foreground">{t('settings.generalSection')}</h3>
           <div className="sm:col-span-2">
             <SettingField label={t('settings.language')}>
               <select
@@ -78,6 +100,33 @@ export function SettingsPanel({
               </select>
             </SettingField>
           </div>
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={openAtLogin}
+              onChange={(e) => onOpenAtLoginChange(e.target.checked)}
+            />
+            {t('settings.openAtLogin')}
+          </label>
+
+          <div className="sm:col-span-2">
+            <SettingField label={t('settings.autoSave')}>
+              <select
+                className="toolbar-select w-full"
+                value={autoSaveSeconds}
+                onChange={(e) => onAutoSaveSecondsChange(Number(e.target.value) as AutoSaveSeconds)}
+              >
+                {AUTO_SAVE_SECONDS.map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    {t(autoSaveLabelKey(seconds))}
+                  </option>
+                ))}
+              </select>
+            </SettingField>
+          </div>
+
+          <h3 className="sm:col-span-2 text-xs font-medium text-foreground">{t('settings.editorSection')}</h3>
 
           <SettingField label={t('settings.themeMode')}>
             <select
@@ -141,10 +190,57 @@ export function SettingsPanel({
               <span className="w-10 text-right tabular-nums">{fontSize}px</span>
             </label>
           </div>
+
+          <SettingField label={t('settings.tabWidth')}>
+            <select
+              className="toolbar-select w-full"
+              value={tabWidth}
+              onChange={(e) => onTabWidthChange(Number(e.target.value) as TabWidth)}
+            >
+              {TAB_WIDTHS.map((width) => (
+                <option key={width} value={width}>
+                  {width}
+                </option>
+              ))}
+            </select>
+          </SettingField>
+
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="shrink-0">{t('settings.lineHeight')}</span>
+              <input
+                className="toolbar-range flex-1"
+                aria-label={t('settings.lineHeight')}
+                type="range"
+                min={1.2}
+                max={2}
+                step={0.1}
+                value={lineHeight}
+                onChange={(e) => onLineHeightChange(Number(e.target.value))}
+              />
+              <span className="w-10 text-right tabular-nums">{lineHeight.toFixed(1)}</span>
+            </label>
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={showLineNumbers}
+              onChange={(e) => onShowLineNumbersChange(e.target.checked)}
+            />
+            {t('settings.showLineNumbers')}
+          </label>
         </div>
       </div>
     </div>
   )
+}
+
+function autoSaveLabelKey(seconds: AutoSaveSeconds): string {
+  if (seconds === 30) return 'settings.autoSave30'
+  if (seconds === 60) return 'settings.autoSave60'
+  if (seconds === 300) return 'settings.autoSave300'
+  return 'settings.autoSaveOff'
 }
 
 function SettingField({ label, children }: { label: string; children: ReactNode }) {

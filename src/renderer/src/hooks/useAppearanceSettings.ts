@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react'
+import {
+  readEditorPreferences,
+  type AutoSaveSeconds,
+  type TabWidth
+} from '@shared/editor-preferences'
 
 export type EditorFontFamily = 'jetbrains-mono' | 'fira-code' | 'menlo'
 export type PreviewFontFamily = 'sans' | 'serif'
@@ -9,14 +14,20 @@ interface AppearanceState {
   previewFontFamily: PreviewFontFamily
   fontSize: number
   previewTheme: PreviewTheme
+  tabWidth: TabWidth
+  lineHeight: number
+  showLineNumbers: boolean
+  autoSaveSeconds: AutoSaveSeconds
 }
 
 const STORAGE_KEY = 'biu-text:appearance'
+const DEFAULT_EDITOR_PREFERENCES = readEditorPreferences(null)
 const DEFAULT_APPEARANCE: AppearanceState = {
   editorFontFamily: 'jetbrains-mono',
   previewFontFamily: 'sans',
   fontSize: 14,
-  previewTheme: 'github'
+  previewTheme: 'github',
+  ...DEFAULT_EDITOR_PREFERENCES
 }
 
 function normalizeFontSize(value: number): number {
@@ -40,7 +51,8 @@ function readStoredAppearance(): AppearanceState {
         typeof parsed.fontSize === 'number'
           ? normalizeFontSize(parsed.fontSize)
           : DEFAULT_APPEARANCE.fontSize,
-      previewTheme: parsed.previewTheme === 'notion' ? 'notion' : DEFAULT_APPEARANCE.previewTheme
+      previewTheme: parsed.previewTheme === 'notion' ? 'notion' : DEFAULT_APPEARANCE.previewTheme,
+      ...readEditorPreferences(parsed)
     }
   } catch {
     return DEFAULT_APPEARANCE
@@ -67,6 +79,13 @@ export function useAppearanceSettings() {
     setFontSize: (fontSize: number) =>
       setAppearance((prev) => ({ ...prev, fontSize: normalizeFontSize(fontSize) })),
     setPreviewTheme: (previewTheme: PreviewTheme) =>
-      setAppearance((prev) => ({ ...prev, previewTheme }))
+      setAppearance((prev) => ({ ...prev, previewTheme })),
+    setTabWidth: (tabWidth: TabWidth) => setAppearance((prev) => ({ ...prev, tabWidth })),
+    setLineHeight: (lineHeight: number) =>
+      setAppearance((prev) => ({ ...prev, lineHeight: readEditorPreferences({ lineHeight }).lineHeight })),
+    setShowLineNumbers: (showLineNumbers: boolean) =>
+      setAppearance((prev) => ({ ...prev, showLineNumbers })),
+    setAutoSaveSeconds: (autoSaveSeconds: AutoSaveSeconds) =>
+      setAppearance((prev) => ({ ...prev, autoSaveSeconds }))
   }
 }

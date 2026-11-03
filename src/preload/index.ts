@@ -80,6 +80,12 @@ const themeAPI = {
   }
 }
 
+const loginAPI = {
+  get: (): Promise<boolean> => ipcRenderer.invoke(IPC.LOGIN_GET),
+
+  set: (openAtLogin: boolean): Promise<boolean> => ipcRenderer.invoke(IPC.LOGIN_SET, openAtLogin)
+}
+
 const languageAPI = {
   getSync: (): AppLanguage => ipcRenderer.sendSync(IPC.LANGUAGE_GET),
 
@@ -114,6 +120,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('themeAPI', themeAPI)
     contextBridge.exposeInMainWorld('windowAPI', windowAPI)
     contextBridge.exposeInMainWorld('languageAPI', languageAPI)
+    contextBridge.exposeInMainWorld('loginAPI', loginAPI)
   } catch (error) {
     console.error(error)
   }
@@ -126,4 +133,6 @@ if (process.contextIsolated) {
   window.windowAPI = windowAPI
   // @ts-expect-error preload 的 Node 类型环境没有 DOM window
   window.languageAPI = languageAPI
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
+  window.loginAPI = loginAPI
 }

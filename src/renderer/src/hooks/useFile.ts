@@ -96,6 +96,13 @@ export function useFile() {
     }
   }, [])
 
+  const autoSave = useCallback(async () => {
+    const { content: cur, filePath: path, isDirty: dirty } = stateRef.current
+    if (!path || !dirty) return
+    const { success } = await window.fileAPI.save(path, cur)
+    if (success) setSavedContent(cur)
+  }, [])
+
   const saveFileAs = useCallback(async () => {
     const { content: cur } = stateRef.current
     const result = await window.fileAPI.saveAs(cur)
@@ -170,6 +177,7 @@ export function useFile() {
     newFile,
     openFile,
     saveFile,
+    autoSave,
     saveFileAs,
     exportHtml,
     exportPdf

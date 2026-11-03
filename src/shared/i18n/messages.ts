@@ -77,7 +77,18 @@ const zhCN = {
     fontSize: '字号',
     adjustFontSize: '调整字号',
     sans: '无衬线',
-    serif: '衬线'
+    serif: '衬线',
+    generalSection: '通用',
+    editorSection: '编辑器',
+    openAtLogin: '开机自启',
+    autoSave: '自动保存',
+    autoSaveOff: '关闭',
+    autoSave30: '30 秒',
+    autoSave60: '1 分钟',
+    autoSave300: '5 分钟',
+    tabWidth: 'Tab 宽度',
+    lineHeight: '行高',
+    showLineNumbers: '显示行号'
   },
   appearance: {
     light: '亮色',
@@ -224,7 +235,18 @@ const enUS = {
     fontSize: 'Font Size',
     adjustFontSize: 'Adjust Font Size',
     sans: 'Sans',
-    serif: 'Serif'
+    serif: 'Serif',
+    generalSection: 'General',
+    editorSection: 'Editor',
+    openAtLogin: 'Launch at login',
+    autoSave: 'Auto Save',
+    autoSaveOff: 'Off',
+    autoSave30: '30 seconds',
+    autoSave60: '1 minute',
+    autoSave300: '5 minutes',
+    tabWidth: 'Tab Width',
+    lineHeight: 'Line Height',
+    showLineNumbers: 'Show line numbers'
   },
   appearance: {
     light: 'Light',
@@ -371,7 +393,18 @@ const zhTW = {
     fontSize: '字級',
     adjustFontSize: '調整字級',
     sans: '無襯線',
-    serif: '襯線'
+    serif: '襯線',
+    generalSection: '一般',
+    editorSection: '編輯器',
+    openAtLogin: '開機時啟動',
+    autoSave: '自動儲存',
+    autoSaveOff: '關閉',
+    autoSave30: '30 秒',
+    autoSave60: '1 分鐘',
+    autoSave300: '5 分鐘',
+    tabWidth: 'Tab 寬度',
+    lineHeight: '行高',
+    showLineNumbers: '顯示行號'
   },
   appearance: {
     light: '淺色',

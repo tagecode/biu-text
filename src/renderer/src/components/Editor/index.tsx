@@ -2,6 +2,7 @@ import { useCallback, useRef, MutableRefObject } from 'react'
 import i18n from '@/i18n'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { indentUnit } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { keymap, placeholder } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
@@ -14,6 +15,9 @@ interface EditorProps {
   theme: Theme
   fontFamily: EditorFontFamily
   fontSize: number
+  tabWidth: number
+  lineHeight: number
+  showLineNumbers: boolean
   editorViewRef: MutableRefObject<EditorView | null>
   previewScrollRef: MutableRefObject<HTMLDivElement | null>
   onChange: (value: string) => void
@@ -56,6 +60,9 @@ export function Editor({
   theme,
   fontFamily,
   fontSize,
+  tabWidth,
+  lineHeight,
+  showLineNumbers,
   editorViewRef,
   previewScrollRef,
   onChange,
@@ -66,6 +73,7 @@ export function Editor({
   const extensions = [
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
+    indentUnit.of(' '.repeat(tabWidth)),
     placeholder(i18n.t('editor.placeholder')),
     // 显式启用搜索扩展，支持替换与正则/大小写/全词选项
     search({ top: true }),
@@ -146,7 +154,7 @@ export function Editor({
       onCreateEditor={handleCreateEditor}
       onUpdate={handleUpdate}
       basicSetup={{
-        lineNumbers: true,
+        lineNumbers: showLineNumbers,
         foldGutter: false,
         highlightActiveLine: true,
         bracketMatching: true,
@@ -154,7 +162,7 @@ export function Editor({
         indentOnInput: true,
         syntaxHighlighting: true,
         searchKeymap: true,
-        tabSize: 2
+        tabSize: tabWidth
       }}
       style={
         {
@@ -165,7 +173,8 @@ export function Editor({
               : fontFamily === 'menlo'
                 ? 'Menlo, Monaco, Consolas, "Courier New", monospace'
                 : '"JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, monospace',
-          '--editor-font-size': `${fontSize}px`
+          '--editor-font-size': `${fontSize}px`,
+          '--editor-line-height': String(lineHeight)
         } as React.CSSProperties
       }
       className="h-full overflow-auto"

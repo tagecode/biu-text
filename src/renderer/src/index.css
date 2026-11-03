@@ -204,6 +204,11 @@
   font-size: var(--editor-font-size);
 }
 
+.cm-line,
+.cm-lineNumbers .cm-gutterElement {
+  line-height: var(--editor-line-height, 1.4);
+}
+
 /* ── 预览字体族 ─────────────────────────────────────────────────── */
 .preview-font-sans .markdown-body {
   font-family:

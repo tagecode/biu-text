@@ -32,5 +32,9 @@ export const IPC = {
 
   // 界面语言
   LANGUAGE_GET: 'language:get',
-  LANGUAGE_SET: 'language:set'
+  LANGUAGE_SET: 'language:set',
+
+  // 开机自启
+  LOGIN_GET: 'login:get',
+  LOGIN_SET: 'login:set'
 } as const
