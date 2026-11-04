@@ -18,6 +18,8 @@ interface FileAPI {
   onMenuSaveAs: (cb: () => void) => UnsubFn
   onMenuExportHtml: (cb: () => void) => UnsubFn
   onMenuExportPdf: (cb: () => void) => UnsubFn
+  onMenuFind: (cb: () => void) => UnsubFn
+  onMenuReplace: (cb: () => void) => UnsubFn
 }
 
 interface ThemeAPI {

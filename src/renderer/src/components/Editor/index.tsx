@@ -5,8 +5,11 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { indentUnit } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { keymap, placeholder } from '@codemirror/view'
-import { Prec } from '@codemirror/state'
+import { EditorState, Prec } from '@codemirror/state'
 import { search, openSearchPanel } from '@codemirror/search'
+import { resolveLanguage } from '@shared/i18n/resolve-language'
+import { searchPhrases } from '@shared/search-phrases'
+import { openReplacePanel } from '@/lib/search-panel'
 import type { EditorFontFamily } from '@/hooks/useAppearanceSettings'
 import type { Theme } from '@/hooks/useTheme'
 
@@ -70,11 +73,13 @@ export function Editor({
 }: EditorProps) {
   const scrollSyncActive = useRef(false)
 
+  const language = resolveLanguage(i18n.language, i18n.language)
   const extensions = [
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
     indentUnit.of(' '.repeat(tabWidth)),
     placeholder(i18n.t('editor.placeholder')),
+    EditorState.phrases.of(searchPhrases(language)),
     // 显式启用搜索扩展，支持替换与正则/大小写/全词选项
     search({ top: true }),
     // 格式化快捷键（优先级最高，防止被浏览器默认行为覆盖）
@@ -86,7 +91,7 @@ export function Editor({
         },
         {
           key: 'Mod-h',
-          run: (view) => openSearchPanel(view)
+          run: (view) => openReplacePanel(view)
         },
         {
           key: 'Mod-b',

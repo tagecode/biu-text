@@ -8,10 +8,11 @@ import { readLanguagePreference } from '../shared/i18n/read-language-preference'
 import { resolveLanguage } from '../shared/i18n/resolve-language'
 import { translate } from '../shared/i18n/translate'
 import type { AppLanguage } from '../shared/i18n/types'
+import { readRecentFiles, recordRecentFileList, type RecentFileRecord } from '../shared/recent-files'
 
 let mainWindow: BrowserWindow | null = null
 let isReadyToClose = false
-let recentFiles: string[] = []
+let recentFiles: RecentFileRecord[] = []
 let currentLanguage: AppLanguage = 'en-US'
 const RECENT_FILES_LIMIT = 10
 
@@ -36,12 +37,7 @@ function getExportBaseName(fileName?: string): string {
 async function loadRecentFiles(): Promise<void> {
   try {
     const raw = await readFile(recentFilesStorePath(), 'utf-8')
-    const data = JSON.parse(raw)
-    if (Array.isArray(data)) {
-      recentFiles = data.filter((item): item is string => typeof item === 'string').slice(0, RECENT_FILES_LIMIT)
-    } else {
-      recentFiles = []
-    }
+    recentFiles = readRecentFiles(JSON.parse(raw))
   } catch {
     recentFiles = []
   }
@@ -54,7 +50,7 @@ async function persistRecentFiles(): Promise<void> {
 async function recordRecentFile(filePath: string): Promise<void> {
   const normalized = filePath.trim()
   if (!normalized) return
-  recentFiles = [normalized, ...recentFiles.filter((item) => item !== normalized)].slice(0, RECENT_FILES_LIMIT)
+  recentFiles = recordRecentFileList(recentFiles, normalized, Date.now(), RECENT_FILES_LIMIT)
   try {
     await persistRecentFiles()
   } catch {
@@ -133,7 +129,11 @@ function buildMenu(): void {
     isMac: true,
     isDev: is.dev,
     appName: app.name,
-    recentFiles: recentFiles.map((path) => ({ path, label: basename(path) })),
+    recentFiles: recentFiles.map((file) => ({
+      path: file.path,
+      label: basename(file.path),
+      openedAt: file.openedAt
+    })),
     actions: {
       newFile: () => mainWindow?.webContents.send(IPC.MENU_NEW_FILE),
       openFile: () => mainWindow?.webContents.send(IPC.MENU_OPEN_FILE),
@@ -141,7 +141,9 @@ function buildMenu(): void {
       save: () => mainWindow?.webContents.send(IPC.MENU_SAVE),
       saveAs: () => mainWindow?.webContents.send(IPC.MENU_SAVE_AS),
       exportHtml: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_HTML),
-      exportPdf: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_PDF)
+      exportPdf: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_PDF),
+      find: () => mainWindow?.webContents.send(IPC.MENU_FIND),
+      replace: () => mainWindow?.webContents.send(IPC.MENU_REPLACE)
     }
   })
 

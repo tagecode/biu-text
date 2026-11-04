@@ -1,4 +1,5 @@
 import { translate } from './translate'
+import { recentFileSublabel } from '../recent-files'
 import type { AppLanguage } from './types'
 
 export interface AppMenuItem {
@@ -20,6 +21,8 @@ export interface AppMenuActions {
   saveAs: () => void
   exportHtml: () => void
   exportPdf: () => void
+  find: () => void
+  replace: () => void
 }
 
 export interface AppMenuTemplateOptions {
@@ -27,19 +30,20 @@ export interface AppMenuTemplateOptions {
   isMac: boolean
   isDev: boolean
   appName: string
-  recentFiles: { path: string; label: string }[]
+  now?: number
+  recentFiles: { path: string; label: string; openedAt?: number | null }[]
   actions: AppMenuActions
 }
 
 export function createAppMenuTemplate(options: AppMenuTemplateOptions): AppMenuItem[] {
-  const { language, isMac, isDev, appName, recentFiles, actions } = options
+  const { language, isMac, isDev, appName, recentFiles, actions, now = Date.now() } = options
   const t = (key: string, vars?: Record<string, string | number>) => translate(language, key, vars)
 
   const recentSubmenu: AppMenuItem[] =
     recentFiles.length > 0
       ? recentFiles.map((file) => ({
           label: file.label,
-          sublabel: file.path,
+          sublabel: recentFileSublabel(file.path, file.openedAt, language, now),
           click: () => actions.openRecent(file.path)
         }))
       : [{ label: t('menu.noRecentFiles'), enabled: false }]
@@ -83,6 +87,9 @@ export function createAppMenuTemplate(options: AppMenuTemplateOptions): AppMenuI
     {
       label: t('menu.edit'),
       submenu: [
+        { label: t('menu.find'), accelerator: 'CmdOrCtrl+F', click: actions.find },
+        { label: t('menu.replace'), accelerator: 'CmdOrCtrl+H', click: actions.replace },
+        { type: 'separator' },
         { role: 'undo', label: t('menu.undo') },
         { role: 'redo', label: t('menu.redo') },
         { type: 'separator' },

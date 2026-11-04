@@ -8,6 +8,8 @@ export const IPC = {
   MENU_SAVE_AS: 'menu:save-as',
   MENU_EXPORT_HTML: 'menu:export-html',
   MENU_EXPORT_PDF: 'menu:export-pdf',
+  MENU_FIND: 'menu:find',
+  MENU_REPLACE: 'menu:replace',
 
   // 渲染进程 → 主进程（invoke / handle）
   FILE_OPEN_DIALOG: 'file:open-dialog',

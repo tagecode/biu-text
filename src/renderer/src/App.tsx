@@ -1,6 +1,8 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EditorView } from '@codemirror/view'
+import { openSearchPanel } from '@codemirror/search'
+import { openReplacePanel } from '@/lib/search-panel'
 import { Editor } from '@/components/Editor'
 import { Preview } from '@/components/Preview'
 import { Toolbar } from '@/components/Toolbar'
@@ -201,9 +203,17 @@ function App() {
     const unsubExportPdf = window.fileAPI.onMenuExportPdf(() => {
       void handleExportPdf()
     })
+    const unsubFind = window.fileAPI.onMenuFind(() => {
+      if (editorViewRef.current) openSearchPanel(editorViewRef.current)
+    })
+    const unsubReplace = window.fileAPI.onMenuReplace(() => {
+      if (editorViewRef.current) openReplacePanel(editorViewRef.current)
+    })
     return () => {
       unsubExportHtml()
       unsubExportPdf()
+      unsubFind()
+      unsubReplace()
     }
   }, [handleExportHtml, handleExportPdf])
 

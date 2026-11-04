@@ -63,6 +63,18 @@ const fileAPI = {
     const handler = () => cb()
     ipcRenderer.on(IPC.MENU_EXPORT_PDF, handler)
     return () => ipcRenderer.removeListener(IPC.MENU_EXPORT_PDF, handler)
+  },
+
+  onMenuFind: (cb: () => void): UnsubFn => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.MENU_FIND, handler)
+    return () => ipcRenderer.removeListener(IPC.MENU_FIND, handler)
+  },
+
+  onMenuReplace: (cb: () => void): UnsubFn => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.MENU_REPLACE, handler)
+    return () => ipcRenderer.removeListener(IPC.MENU_REPLACE, handler)
   }
 }
 

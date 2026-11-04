@@ -128,13 +128,17 @@ describe('createAppMenuTemplate', () => {
         save: noop,
         saveAs: noop,
         exportHtml: noop,
-        exportPdf: noop
+        exportPdf: noop,
+        find: noop,
+        replace: noop
       }
     })
 
     const labels = labelsOf(template)
     expect(labels).toContain('文件')
     expect(labels).toContain('新建')
+    expect(labels).toContain('查找')
+    expect(labels).toContain('替换')
     expect(labels).toContain('暂无最近文件')
     expect(labels).not.toContain('开发者工具')
     expect(findItem(template, '暂无最近文件')?.enabled).toBe(false)
@@ -147,7 +151,8 @@ describe('createAppMenuTemplate', () => {
       isMac: true,
       isDev: true,
       appName: 'BiuText',
-      recentFiles: [{ path: '/tmp/a.md', label: 'a.md' }],
+      now: new Date(2026, 0, 20, 15, 45).getTime(),
+      recentFiles: [{ path: '/tmp/a.md', label: 'a.md', openedAt: new Date(2026, 0, 19, 9, 5).getTime() }],
       actions: {
         newFile: noop,
         openFile: noop,
@@ -155,14 +160,18 @@ describe('createAppMenuTemplate', () => {
         save: noop,
         saveAs: noop,
         exportHtml: noop,
-        exportPdf: noop
+        exportPdf: noop,
+        find: noop,
+        replace: noop
       }
     })
 
     expect(labelsOf(template)).toEqual(
-      expect.arrayContaining(['File', 'New', 'Recent Files', 'a.md', 'Developer Tools', 'About BiuText'])
+      expect.arrayContaining(['File', 'New', 'Find', 'Replace', 'Recent Files', 'a.md', 'Developer Tools', 'About BiuText'])
     )
-    findItem(template, 'a.md')?.click?.()
+    const recent = findItem(template, 'a.md')
+    expect(recent?.sublabel).toMatch(/ · \/tmp\/a\.md$/)
+    recent?.click?.()
     expect(opened).toEqual(['/tmp/a.md'])
   })
 })
