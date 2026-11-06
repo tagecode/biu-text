@@ -24,6 +24,9 @@ export const IPC = {
   APP_CLOSE_CONFIRMED: 'app:close-confirmed',
   APP_CLOSE_CANCELLED: 'app:close-cancelled',
 
+  // 未保存更改的三态确认（保存 / 不保存 / 取消）
+  APP_CONFIRM_DISCARD: 'app:confirm-discard',
+
   // 窗口标题
   WINDOW_SET_TITLE: 'window:set-title',
 

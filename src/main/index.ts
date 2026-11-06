@@ -315,6 +315,23 @@ ipcMain.on(IPC.APP_CLOSE_CANCELLED, () => {
   isReadyToClose = false
 })
 
+// 关闭窗口、新建、打开共用：脏内容先问一句，避免静默丢弃
+ipcMain.handle(IPC.APP_CONFIRM_DISCARD, async (_e, documentName: unknown) => {
+  const name = typeof documentName === 'string' && documentName ? documentName : ''
+  const { response } = await dialog.showMessageBox(mainWindow!, {
+    type: 'warning',
+    buttons: [t('dialog.save'), t('dialog.discard'), t('dialog.cancel')],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+    message: t('dialog.unsavedTitle'),
+    detail: t('dialog.unsavedDetail', { name })
+  })
+  if (response === 0) return 'save'
+  if (response === 1) return 'discard'
+  return 'cancel'
+})
+
 ipcMain.on(IPC.WINDOW_SET_TITLE, (_e, title: string) => {
   mainWindow?.setTitle(title)
 })

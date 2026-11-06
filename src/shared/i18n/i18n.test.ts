@@ -97,7 +97,7 @@ describe('translate', () => {
     expect(translate('zh-TW', 'menu.file')).toBe('檔案')
     expect(translate('zh-TW', 'dialog.openFailed')).toBe('開啟失敗')
     expect(translate('en-US', 'menu.file')).toBe('File')
-    expect(translate('zh-CN', 'dialog.unsavedClose')).toContain('未保存')
+    expect(translate('zh-CN', 'dialog.unsavedTitle')).toContain('未保存')
     expect(translate('en-US', 'editor.placeholder')).toBe('Start writing…')
     expect(translate('zh-TW', 'editor.placeholder')).toBe('開始書寫…')
     expect(translate('en-US', 'status.lineCol', { line: 2, col: 4 })).toBe('Ln 2, Col 4')

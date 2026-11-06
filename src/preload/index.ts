@@ -113,6 +113,9 @@ const imageAPI = {
 const windowAPI = {
   platform: process.platform,
 
+  confirmDiscardChanges: (documentName: string): Promise<'save' | 'discard' | 'cancel'> =>
+    ipcRenderer.invoke(IPC.APP_CONFIRM_DISCARD, documentName),
+
   setTitle: (title: string): void => {
     ipcRenderer.send(IPC.WINDOW_SET_TITLE, title)
   },

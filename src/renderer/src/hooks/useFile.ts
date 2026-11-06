@@ -13,6 +13,11 @@ function languageFrom(code: string | undefined): AppLanguage {
   return resolveLanguage(code, code)
 }
 
+function documentName(path: string | null, fallback: string): string {
+  if (!path) return fallback
+  return path.replaceAll('\\', '/').split('/').pop() || fallback
+}
+
 export interface FileState {
   content: string
   filePath: string | null
@@ -61,11 +66,38 @@ export function useFile() {
     setContentState(val)
   }, [])
 
-  const newFile = useCallback(() => {
+  const saveFile = useCallback(async (): Promise<boolean> => {
+    const { content: cur, filePath: path } = stateRef.current
+    if (!path) {
+      // 没有路径，执行另存为
+      const result = await window.fileAPI.saveAs(cur)
+      if (!result) return false
+      setFilePath(result.path)
+      setSavedContent(cur)
+      return true
+    }
+    const { success } = await window.fileAPI.save(path, cur)
+    if (success) setSavedContent(cur)
+    return success
+  }, [])
+
+  // 新建/打开/关闭共用的脏检查：交给主进程弹三态对话框，选"保存"时真的写盘
+  const confirmLeaveCurrentDocument = useCallback(async (): Promise<boolean> => {
+    const { isDirty: dirty, filePath: path } = stateRef.current
+    if (!dirty) return true
+    const name = documentName(path, t('app.untitled'))
+    const choice = await window.windowAPI.confirmDiscardChanges(name)
+    if (choice === 'cancel') return false
+    if (choice === 'discard') return true
+    return saveFile()
+  }, [saveFile, t])
+
+  const newFile = useCallback(async () => {
+    if (!(await confirmLeaveCurrentDocument())) return
     setContentState('')
     setFilePath(null)
     setSavedContent('')
-  }, [])
+  }, [confirmLeaveCurrentDocument])
 
   const applyOpenedFile = useCallback((result: { path: string; content: string } | null) => {
     if (!result) return
@@ -75,31 +107,19 @@ export function useFile() {
   }, [])
 
   const openFile = useCallback(async () => {
+    if (!(await confirmLeaveCurrentDocument())) return
     const result = await window.fileAPI.openDialog()
     applyOpenedFile(result)
-  }, [applyOpenedFile])
+  }, [applyOpenedFile, confirmLeaveCurrentDocument])
 
   const openRecentFile = useCallback(
     async (path: string) => {
+      if (!(await confirmLeaveCurrentDocument())) return
       const result = await window.fileAPI.openPath(path)
       applyOpenedFile(result)
     },
-    [applyOpenedFile]
+    [applyOpenedFile, confirmLeaveCurrentDocument]
   )
-
-  const saveFile = useCallback(async () => {
-    const { content: cur, filePath: path } = stateRef.current
-    if (!path) {
-      // 没有路径，执行另存为
-      const result = await window.fileAPI.saveAs(cur)
-      if (!result) return
-      setFilePath(result.path)
-      setSavedContent(cur)
-    } else {
-      const { success } = await window.fileAPI.save(path, cur)
-      if (success) setSavedContent(cur)
-    }
-  }, [])
 
   const autoSave = useCallback(async () => {
     const { content: cur, filePath: path, isDirty: dirty } = stateRef.current
@@ -147,19 +167,16 @@ export function useFile() {
   // 窗口关闭前确认
   useEffect(() => {
     const unsub = window.windowAPI.onWillClose(() => {
-      if (!stateRef.current.isDirty) {
-        window.windowAPI.confirmClose()
-        return
-      }
-      const confirmed = window.confirm(t('dialog.unsavedClose'))
-      if (confirmed) {
-        window.windowAPI.confirmClose()
-      } else {
-        window.windowAPI.cancelClose()
-      }
+      void (async () => {
+        if (await confirmLeaveCurrentDocument()) {
+          window.windowAPI.confirmClose()
+        } else {
+          window.windowAPI.cancelClose()
+        }
+      })()
     })
     return unsub
-  }, [t])
+  }, [confirmLeaveCurrentDocument])
 
   // 更新窗口标题
   useEffect(() => {

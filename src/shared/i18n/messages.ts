@@ -49,7 +49,11 @@ const zhCN = {
     allFiles: '所有文件',
     htmlFiles: 'HTML 文件',
     pdfFiles: 'PDF 文件',
-    unsavedClose: '文件有未保存的更改，确定要关闭吗？'
+    unsavedTitle: '有未保存的更改',
+    unsavedDetail: '「{{name}}」有未保存的更改，要保存吗？',
+    save: '保存',
+    discard: '不保存',
+    cancel: '取消'
   },
   toolbar: {
     new: '新建文件',
@@ -212,7 +216,11 @@ const enUS = {
     allFiles: 'All Files',
     htmlFiles: 'HTML Files',
     pdfFiles: 'PDF Files',
-    unsavedClose: 'This file has unsaved changes. Close it anyway?'
+    unsavedTitle: 'Unsaved Changes',
+    unsavedDetail: '“{{name}}” has unsaved changes. Do you want to save them?',
+    save: 'Save',
+    discard: "Don't Save",
+    cancel: 'Cancel'
   },
   toolbar: {
     new: 'New File',
@@ -375,7 +383,11 @@ const zhTW = {
     allFiles: '所有檔案',
     htmlFiles: 'HTML 檔案',
     pdfFiles: 'PDF 檔案',
-    unsavedClose: '檔案有尚未儲存的變更，確定要關閉嗎？'
+    unsavedTitle: '有尚未儲存的變更',
+    unsavedDetail: '「{{name}}」有尚未儲存的變更，要儲存嗎？',
+    save: '儲存',
+    discard: '不儲存',
+    cancel: '取消'
   },
   toolbar: {
     new: '新增檔案',

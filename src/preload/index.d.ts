@@ -30,6 +30,7 @@ interface ThemeAPI {
 
 interface WindowAPI {
   platform: string
+  confirmDiscardChanges: (documentName: string) => Promise<'save' | 'discard' | 'cancel'>
   setTitle: (title: string) => void
   onWillClose: (cb: () => void) => UnsubFn
   confirmClose: () => void

@@ -60,7 +60,7 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 │                            Electron 主进程                            │
 │  src/main/index.ts                                                    │
 │  ┌────────────────┬─────────────────┬──────────────┬───────────────┐ │
-│  │ 窗口生命周期    │ 原生菜单(macOS)  │ 文件 I/O      │ 系统集成       │ │
+│  │ 窗口生命周期    │ 原生菜单(全平台) │ 文件 I/O      │ 系统集成       │ │
 │  │ BrowserWindow  │ menu-template   │ fs/promises  │ nativeTheme   │ │
 │  │ 关闭握手        │ 最近文件子菜单   │ 对话框         │ loginItem     │ │
 │  └────────────────┴─────────────────┴──────────────┴───────────────┘ │
@@ -71,8 +71,8 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
                                 │ IPC（invoke/handle、send/on、sendSync）
 ┌───────────────────────────────┴──────────────────────────────────────┐
 │                       预加载 src/preload/index.ts                     │
-│  contextBridge 暴露 5 个门面：fileAPI / themeAPI / windowAPI          │
-│                              languageAPI / loginAPI                   │
+│  contextBridge 暴露 6 个门面：fileAPI / themeAPI / windowAPI          │
+│                       languageAPI / loginAPI / imageAPI               │
 │  类型声明：src/preload/index.d.ts                                     │
 └───────────────────────────────┬──────────────────────────────────────┘
                                 │ 受限 API（无直接 fs / ipcRenderer）
@@ -151,7 +151,7 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 `src/main/index.ts` 是唯一的主进程入口，承担：
 
 1. **窗口生命周期**：创建主窗口（1280×800，最小 800×600，`ready-to-show` 后显示；macOS 使用 `hiddenInset` 标题栏）。
-2. **原生菜单**：仅 macOS 构建应用菜单；菜单文案与最近文件由共享层 `createAppMenuTemplate()` 生成。
+2. **原生菜单**：全平台构建应用菜单（Windows/Linux 用 `autoHideMenuBar` 收起）；菜单文案与最近文件由共享层 `createAppMenuTemplate()` 生成。
 3. **文件系统**：打开/保存/另存为/导出 HTML/导出 PDF，全部使用 `fs/promises`。
 4. **系统集成**：`nativeTheme`（主题）、`app.getLoginItemSettings/setLoginItemSettings`（开机自启）、`shell.openExternal`（外部链接）。
 5. **持久化**：语言偏好与最近文件列表写入 `app.getPath('userData')`。
@@ -166,7 +166,7 @@ app.whenReady()
   ├─ nativeTheme.on('updated') → 推送 IPC.THEME_CHANGED
   ├─ loadLanguage()      // 读 language.json → resolveLanguage(saved, app.getLocale())
   ├─ loadRecentFiles()   // 读 recent-files.json → readRecentFiles()
-  ├─ buildMenu()         // macOS 才真正设置应用菜单
+  ├─ buildMenu()         // 全平台 setApplicationMenu（Win/Linux 菜单栏自动隐藏）
   └─ createWindow()      // BrowserWindow + 关闭拦截 + setWindowOpenHandler
 app.on('activate')       // macOS 无窗口时重建
 app.on('window-all-closed') // 非 macOS 退出
@@ -174,16 +174,17 @@ app.on('window-all-closed') // 非 macOS 退出
 
 ### 4.2 预加载与 API 门面
 
-`src/preload/index.ts` 通过 `contextBridge.exposeInMainWorld` 暴露 **5 个命名空间**，渲染进程只能看到这些方法，无法直接访问 `ipcRenderer`：
+`src/preload/index.ts` 通过 `contextBridge.exposeInMainWorld` 暴露 **6 个命名空间**，渲染进程只能看到这些方法，无法直接访问 `ipcRenderer`：
 
 | 门面 | 方法 | 通道模式 |
 |------|------|----------|
 | `fileAPI` | `openDialog` / `openPath` / `save` / `saveAs` / `exportHtml` / `exportPdf` | `invoke` |
 | `fileAPI` | `onMenuNew/Open/OpenRecent/Save/SaveAs/ExportHtml/ExportPdf/Find/Replace` | 主→渲染 `on`，返回退订函数 |
 | `themeAPI` | `get` / `set` / `onChange` | `invoke` / `send` / 主→渲染 |
-| `windowAPI` | `platform` / `setTitle` / `onWillClose` / `confirmClose` / `cancelClose` | 属性 / `send` / 主→渲染 |
+| `windowAPI` | `platform` / `confirmDiscardChanges` / `setTitle` / `onWillClose` / `confirmClose` / `cancelClose` | 属性 / `invoke` / `send` / 主→渲染 |
 | `languageAPI` | `getSync` / `set` | `sendSync` / `invoke` |
 | `loginAPI` | `get` / `set` | `invoke` |
+| `imageAPI` | `setDocumentPath` | `send` |
 
 类型契约维护在 `src/preload/index.d.ts`，通过 `declare global { interface Window { ... } }` 供渲染进程使用，并由 `tsconfig.web.json` 的 `include` 纳入类型检查。
 
@@ -202,6 +203,7 @@ app.on('window-all-closed') // 非 macOS 退出
 | 菜单触发 | `MENU_NEW_FILE`、`MENU_OPEN_FILE`、`MENU_OPEN_RECENT`、`MENU_SAVE`、`MENU_SAVE_AS`、`MENU_EXPORT_HTML`、`MENU_EXPORT_PDF`、`MENU_FIND`、`MENU_REPLACE` | 主 → 渲染 | `webContents.send` |
 | 文件 | `FILE_OPEN_DIALOG`、`FILE_OPEN_PATH`、`FILE_SAVE`、`FILE_SAVE_AS`、`FILE_EXPORT_HTML`、`FILE_EXPORT_PDF` | 渲染 → 主 | `invoke/handle` |
 | 关闭握手 | `APP_WILL_CLOSE`、`APP_CLOSE_CONFIRMED`、`APP_CLOSE_CANCELLED` | 双向 | `send`/`on` |
+| 未保存确认 | `APP_CONFIRM_DISCARD` | 渲染 → 主 | `invoke/handle` |
 | 窗口 | `WINDOW_SET_TITLE` | 渲染 → 主 | `send` |
 | 图片目录 | `DOCUMENT_SET_PATH` | 渲染 → 主 | `send` |
 | 主题 | `THEME_GET`、`THEME_SET`、`THEME_CHANGED` | 双向 | `invoke` / `send` / `send` |
@@ -237,14 +239,18 @@ app.on('window-all-closed') // 非 macOS 退出
 用户关闭窗口
   └─ main: BrowserWindow 'close' 事件
        if (!isReadyToClose) { e.preventDefault(); send(APP_WILL_CLOSE) }
-渲染 windowAPI.onWillClose
+渲染 windowAPI.onWillClose → confirmLeaveCurrentDocument()
   └─ 不脏 → confirmClose() → 主进程 isReadyToClose = true → close() → 正常退出
-  └─ 脏   → window.confirm(未保存文案)
-              ├─ 确认 → confirmClose()
-              └─ 取消 → cancelClose() → isReadyToClose = false
+  └─ 脏   → invoke APP_CONFIRM_DISCARD(文件名)
+              └─ main: dialog.showMessageBox({ 保存 / 不保存 / 取消 })
+                   ├─ 保存   → 渲染进程执行 saveFile()（无路径则先另存为）
+                   │            ├─ 写盘成功 → confirmClose()
+                   │            └─ 用户取消另存为 → cancelClose()（文档原样保留）
+                   ├─ 不保存 → confirmClose()
+                   └─ 取消   → cancelClose() → isReadyToClose = false
 ```
 
-> 局限：确认对话框使用浏览器 `window.confirm`，外观不统一且无"保存 / 不保存 / 取消"三态；后续应改为 `dialog.showMessageBox`（§17 R10）。
+同一个 `confirmLeaveCurrentDocument()` 也被**新建**与**打开**（含最近文件）复用：脏内容时先弹同一个三态对话框，选"取消"或"另存为"被取消都直接中止操作，不再静默覆盖内存中的草稿（§17 R10/R12）。
 
 #### 4.5.4 主题同步
 
@@ -269,7 +275,7 @@ biu-text/
 ├── build/                         # 打包中间产物
 ├── out/                           # electron-vite 构建输出
 ├── src/
-│   ├── main/index.ts              # 主进程全部实现（约 390 行）
+│   ├── main/index.ts              # 主进程全部实现（约 415 行）
 │   ├── main/image-path.ts         # 预览图片的路径解析与目录白名单
 │   ├── preload/
 │   │   ├── index.ts               # contextBridge 门面
@@ -612,7 +618,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 
 - `isDirty` 由 `content !== savedContent` 派生，不单独存储。
 - 标题规则：有文件 → `文件名 · BiuText`（脏）/ `文件名 - BiuText`（净）；无文件且脏 → `未命名 · BiuText`。
-- 新建/打开**不会**先询问脏内容（当前直接覆盖内存状态）；关闭窗口时才确认。这是已知的体验缺口（§17 R13）。
+- 新建/打开/关闭共用同一道脏检查 `confirmLeaveCurrentDocument()`：脏内容时弹三态对话框（保存 / 不保存 / 取消），三条路径行为一致（§17 R10/R12 已修复）。选择"取消"或另存为被取消时，操作整体中止、文档保持原样。
 
 ### 9.2 欢迎文档
 
@@ -1049,9 +1055,9 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R7 | 启动用 `sendSync` 取语言 | 主进程繁忙时阻塞首帧 | 可接受；若启动变慢改为预加载注入 + 异步切换 |
 | R8 | ~~CI 未跑 lint/typecheck/test/check:i18n~~ **已修复** | 回归风险靠人工 | 新增 `ci.yml` 的 `quality` job，`release.yml` 通过 `workflow_call` 复用并设 `needs: quality`；同时修复了 13 处既有 lint 报错。剩余动作：观察首次 CI 运行，必要时调 Node 版本或缓存策略 |
 | R9 | 单文档状态假设 | 多标签需要重构 `useFile`/`App` | 在 v1.1 前引入文档集合模型（§16.4） |
-| R10 | 关闭确认使用 `window.confirm`，无"保存"选项 | 用户只能丢弃或取消；样式不统一 | 改用 `dialog.showMessageBox` 三态按钮 |
+| R10 | ~~关闭确认使用 `window.confirm`，无"保存"选项~~ **已修复** | 用户只能丢弃或取消；样式不统一 | 改为主进程 `dialog.showMessageBox` 三态按钮（保存 / 不保存 / 取消，`cancelId` 指向取消），经 `APP_CONFIRM_DISCARD` 由渲染进程 invoke；文案三语对齐 |
 | R11 | 无结构化日志/崩溃上报 | 线上问题难定位 | 主进程统一日志（分级 + 落盘），渲染进程 `window.onerror` 上报主进程 |
-| R12 | 新建/打开不提示保存脏内容 | 可能丢失未保存修改 | 在 new/open 前复用关闭确认逻辑 |
+| R12 | ~~新建/打开不提示保存脏内容~~ **已修复** | 可能丢失未保存修改 | `useFile` 抽出 `confirmLeaveCurrentDocument()`，新建/打开/打开最近文件/关闭四条路径共用；选"保存"时执行真实写盘，写盘失败或另存为被取消则中止操作 |
 | R13 | 预览外链点击处理为兜底空操作，依赖主进程拦截 | 行为耦合、可读性差 | 明确由 `setWindowOpenHandler` 负责，移除或注释化渲染层监听 |
 | R14 | 5 个 Radix 包（dialog、dropdown-menu、scroll-area、toast、tooltip）已装未用 | 增大依赖体积与安装时间 | 按需移除，或在引入通知/对话框/Collapsible 时复用 |
 
@@ -1125,6 +1131,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | `LOGIN_GET` / `LOGIN_SET` | `boolean` | `boolean` | 异常时返回当前/`false` |
 | `LANGUAGE_SET` | `string` | `AppLanguage` | 写盘失败仍保留会话内选择 |
 | `LANGUAGE_GET` | — | `AppLanguage` | `sendSync`，通过 `event.returnValue` 返回 |
+| `APP_CONFIRM_DISCARD` | `string`（文档名） | `'save' \| 'discard' \| 'cancel'` | 关闭对话框等同于取消 |
 
 ### B. 本地存储键清单
 
