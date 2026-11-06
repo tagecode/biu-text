@@ -59,6 +59,19 @@ function ToastDescription({ className, ...props }: React.ComponentProps<typeof T
   )
 }
 
+function ToastAction({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Action>) {
+  return (
+    <ToastPrimitive.Action
+      data-slot="toast-action"
+      className={cn(
+        'mt-1.5 inline-flex h-7 shrink-0 items-center rounded-md border border-border px-2.5 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Close>) {
   return (
     <ToastPrimitive.Close
@@ -74,4 +87,4 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
   )
 }
 
-export { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport }
+export { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport }

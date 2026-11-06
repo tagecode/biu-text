@@ -39,6 +39,14 @@ export const IPC = {
   // 图片落盘到文档同目录的 assets/
   IMAGE_SAVE: 'image:save',
   IMAGE_PICK: 'image:pick',
+  IMAGE_PICK_INPUT: 'image:pick-input',
+
+  // 云图床：配置读写、连接测试、上传与上传进度
+  IMAGE_HOST_GET: 'image-host:get',
+  IMAGE_HOST_SET: 'image-host:set',
+  IMAGE_HOST_TEST: 'image-host:test',
+  IMAGE_UPLOAD: 'image:upload',
+  IMAGE_UPLOAD_PROGRESS: 'image:upload-progress',
 
   // 主题
   THEME_GET: 'theme:get',

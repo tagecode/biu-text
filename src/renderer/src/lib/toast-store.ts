@@ -1,10 +1,16 @@
 import type { NotificationLevel } from '@shared/notification'
 
+export interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 export interface ToastInput {
   title: string
   description?: string
   level?: NotificationLevel
   duration?: number
+  action?: ToastAction
 }
 
 export interface ToastItem extends ToastInput {

@@ -76,8 +76,13 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const resolveImageSrc = env?.resolveImageSrc as MarkdownRenderEnv['resolveImageSrc']
   const srcIndex = token.attrIndex('src')
+  const rawSrc = srcIndex >= 0 ? token.attrs![srcIndex][1] : ''
+  // 上传占位符不是真的图片地址，画成占位块，免得预览区出现裂图
+  if (rawSrc.startsWith('uploading:')) {
+    return '<span class="biu-uploading"></span>'
+  }
   if (resolveImageSrc && srcIndex >= 0) {
-    token.attrSet('src', resolveImageSrc(token.attrs![srcIndex][1]))
+    token.attrSet('src', resolveImageSrc(rawSrc))
   }
   return defaultImageRule(tokens, idx, options, env, self)
 }

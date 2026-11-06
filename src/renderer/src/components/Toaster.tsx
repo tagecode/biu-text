@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle2, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Toast,
+  ToastAction,
   ToastClose,
   ToastDescription,
   ToastProvider,
@@ -41,6 +42,11 @@ export function Toaster() {
             <div className="grid min-w-0 gap-0.5">
               <ToastTitle>{item.title}</ToastTitle>
               {item.description ? <ToastDescription>{item.description}</ToastDescription> : null}
+              {item.action ? (
+                <ToastAction altText={item.action.label} onClick={item.action.onClick}>
+                  {item.action.label}
+                </ToastAction>
+              ) : null}
             </div>
             <ToastClose aria-label={t('notify.close')} />
           </Toast>

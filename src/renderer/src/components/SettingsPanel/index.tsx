@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppLanguage } from '@/hooks/useAppLanguage'
 import { LANGUAGE_NAMES, type AppLanguage } from '@shared/i18n/types'
 import type {
@@ -17,6 +16,8 @@ import type {
 } from '@/hooks/useAppearanceSettings'
 import { AUTO_SAVE_SECONDS, TAB_WIDTHS, type AutoSaveSeconds, type TabWidth } from '@shared/editor-preferences'
 import type { ThemeMode } from '@/hooks/useTheme'
+import type { ImageHostConfigView } from '@shared/image-host'
+import { ImageHostSettings } from './ImageHostSettings'
 
 interface SettingsPanelProps {
   open: boolean
@@ -30,6 +31,7 @@ interface SettingsPanelProps {
   showLineNumbers: boolean
   autoSaveSeconds: AutoSaveSeconds
   openAtLogin: boolean
+  imageHost: ImageHostConfigView | null
   onClose: () => void
   onThemeModeChange: (value: ThemeMode) => void
   onEditorFontFamilyChange: (value: EditorFontFamily) => void
@@ -41,6 +43,7 @@ interface SettingsPanelProps {
   onShowLineNumbersChange: (value: boolean) => void
   onAutoSaveSecondsChange: (value: AutoSaveSeconds) => void
   onOpenAtLoginChange: (value: boolean) => void
+  onSaveImageHost: (view: ImageHostConfigView) => Promise<void>
 }
 
 export function SettingsPanel({
@@ -55,6 +58,7 @@ export function SettingsPanel({
   showLineNumbers,
   autoSaveSeconds,
   openAtLogin,
+  imageHost,
   onClose,
   onThemeModeChange,
   onEditorFontFamilyChange,
@@ -65,7 +69,8 @@ export function SettingsPanel({
   onLineHeightChange,
   onShowLineNumbersChange,
   onAutoSaveSecondsChange,
-  onOpenAtLoginChange
+  onOpenAtLoginChange,
+  onSaveImageHost
 }: SettingsPanelProps) {
   const { t } = useTranslation()
   const { language, setLanguage } = useAppLanguage()
@@ -80,21 +85,11 @@ export function SettingsPanel({
       <DialogContent className="max-w-lg gap-0 overflow-hidden p-0" aria-describedby={undefined}>
         <div className="flex items-center justify-between border-b px-4 py-3">
           <DialogTitle>{t('settings.title')}</DialogTitle>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DialogClose asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  aria-label={t('settings.closePanel')}
-                >
-                  <X className="size-4" />
-                </Button>
-              </DialogClose>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('settings.close')}</TooltipContent>
-          </Tooltip>
+          <DialogClose asChild>
+            <Button variant="ghost" size="icon" className="size-7" aria-label={t('settings.closePanel')}>
+              <X className="size-4" />
+            </Button>
+          </DialogClose>
         </div>
 
         <div className="grid max-h-[70vh] gap-4 overflow-y-auto px-4 py-4 sm:grid-cols-2">
@@ -258,20 +253,7 @@ export function SettingsPanel({
 
           <h3 className="text-xs font-medium sm:col-span-2">{t('settings.imageSection')}</h3>
 
-          {/* 目前只有本地存储一种实现，云图床留作占位 */}
-          <SettingField id="setting-image-storage" label={t('image.storage')} className="sm:col-span-2">
-            <Select value="local" onValueChange={() => undefined}>
-              <SelectTrigger id="setting-image-storage" size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="local">{t('image.storageLocal')}</SelectItem>
-                <SelectItem value="cloud" disabled>
-                  {t('image.storageCloudSoon')}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </SettingField>
+          <ImageHostSettings config={imageHost} onSave={onSaveImageHost} />
         </div>
       </DialogContent>
     </Dialog>

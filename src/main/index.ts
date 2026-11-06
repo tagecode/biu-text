@@ -7,6 +7,15 @@ import { IMAGE_SCHEME } from '../shared/image-url'
 import { imageContentType, isInsideDirectory, resolveImageRequest } from './image-path'
 import { imageFileName } from './image-save'
 import { inlineLocalImages } from './export-image'
+import { loadImageHostConfig, saveImageHostConfig } from './image-host-store'
+import { testImageHost, uploadImage } from './image-host-providers'
+import {
+  DEFAULT_IMAGE_HOST_CONFIG,
+  mergeImageView,
+  toImageView,
+  type ImageHostConfig,
+  type ImageHostConfigView
+} from '../shared/image-host'
 import type { ImageFileInput } from '../shared/image-input'
 import { createAppMenuTemplate } from '../shared/i18n/menu-template'
 import { readLanguagePreference } from '../shared/i18n/read-language-preference'
@@ -20,7 +29,10 @@ let isReadyToClose = false
 let recentFiles: RecentFileRecord[] = []
 let currentLanguage: AppLanguage = 'en-US'
 let imageBaseDir: string | null = null
+let imageHostConfig: ImageHostConfig = DEFAULT_IMAGE_HOST_CONFIG
 const RECENT_FILES_LIMIT = 10
+/** PRD F-09：单张图片默认上限 10MB */
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 // 必须在 app ready 之前注册，预览区才能从自定义协议加载本地图片
 protocol.registerSchemesAsPrivileged([
@@ -59,6 +71,14 @@ const IMAGE_DIALOG_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'b
 /** 未保存的新文档没有目录，暂时无法插图 */
 function documentDirectory(documentPath: unknown): string | null {
   return typeof documentPath === 'string' && isAbsolute(documentPath) ? dirname(documentPath) : null
+}
+
+/** IPC 传过来的二进制可能是 ArrayBuffer 或 TypedArray，统一成 Uint8Array */
+function toByteArray(value: unknown): Uint8Array | null {
+  if (value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  return null
 }
 
 async function saveImageAssets(documentPath: unknown, files: unknown): Promise<string[]> {
@@ -283,7 +303,7 @@ ipcMain.handle(IPC.IMAGE_SAVE, (_e, payload: { documentPath?: unknown; files?: u
 )
 
 // 工具栏「插入图片」：选文件后直接由主进程读取，渲染进程拿不到任意路径
-ipcMain.handle(IPC.IMAGE_PICK, async (_e, documentPath: unknown) => {
+async function pickImageFiles(): Promise<ImageFileInput[]> {
   if (!mainWindow) return []
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: t('image.insert'),
@@ -302,8 +322,76 @@ ipcMain.handle(IPC.IMAGE_PICK, async (_e, documentPath: unknown) => {
       // 单个文件读不出来不影响其余图片
     }
   }
-  return saveImageAssets(documentPath, files)
+  return files
+}
+
+ipcMain.handle(IPC.IMAGE_PICK, async (_e, documentPath: unknown) =>
+  saveImageAssets(documentPath, await pickImageFiles())
+)
+
+// 云图床模式下不落盘，直接把字节交回渲染进程上传
+ipcMain.handle(IPC.IMAGE_PICK_INPUT, () => pickImageFiles())
+
+// ─── 云图床 ─────────────────────────────────────────────────────
+
+ipcMain.handle(IPC.IMAGE_HOST_GET, () => toImageView(imageHostConfig))
+
+ipcMain.handle(IPC.IMAGE_HOST_SET, async (_e, view: ImageHostConfigView | null) => {
+  const next = mergeImageView(view, imageHostConfig)
+  try {
+    await saveImageHostConfig(next)
+  } catch (err) {
+    // 落盘失败就保持原配置，并让渲染进程知道没存上，别再弹「已保存」
+    notify('error', t('imageHost.saveFailed'), String(err))
+    throw err
+  }
+  imageHostConfig = next
+  return toImageView(next)
 })
+
+// 只测不存：草稿直接拿来测，避免「测试连接」顺手改掉已保存的配置
+ipcMain.handle(IPC.IMAGE_HOST_TEST, async (_e, view: ImageHostConfigView | null) => {
+  try {
+    const result = await testImageHost(mergeImageView(view, imageHostConfig))
+    return { ok: true, url: result.url }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle(
+  IPC.IMAGE_UPLOAD,
+  async (
+    event,
+    payload: { uploadId?: unknown; name?: unknown; mime?: unknown; bytes?: unknown }
+  ) => {
+    const uploadId = typeof payload?.uploadId === 'string' ? payload.uploadId : ''
+    if (!uploadId) return { ok: false, error: 'missing upload id' }
+
+    const bytes = toByteArray(payload?.bytes)
+    if (!bytes) return { ok: false, error: t('imageHost.readFailed') }
+    if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+      return { ok: false, error: t('imageHost.tooLarge', { size: '10MB' }) }
+    }
+
+    try {
+      const result = await uploadImage(
+        imageHostConfig,
+        {
+          name: typeof payload.name === 'string' ? payload.name : 'image',
+          mime: typeof payload.mime === 'string' ? payload.mime : '',
+          bytes
+        },
+        (loaded, total) => {
+          event.sender.send(IPC.IMAGE_UPLOAD_PROGRESS, { uploadId, loaded, total })
+        }
+      )
+      return { ok: true, url: result.url }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+)
 
 ipcMain.handle(
   IPC.FILE_EXPORT_HTML,
@@ -471,6 +559,7 @@ app.whenReady().then(async () => {
 
   await loadLanguage()
   await loadRecentFiles()
+  imageHostConfig = await loadImageHostConfig()
   registerImageProtocol()
   buildMenu()
   createWindow()

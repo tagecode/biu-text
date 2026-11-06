@@ -66,6 +66,11 @@ export function useFile() {
     setContentState(val)
   }, [])
 
+  // 占位符回填等异步改写：基于最新内容做替换，避免闭包里的旧值把用户输入覆盖掉
+  const updateContent = useCallback((updater: (prev: string) => string) => {
+    setContentState((prev) => updater(prev))
+  }, [])
+
   // 有路径就直接写盘，没有路径走另存为；返回最终落盘的路径，取消时返回 null
   const saveDocument = useCallback(async (): Promise<string | null> => {
     const { content: cur, filePath: path } = stateRef.current
@@ -200,6 +205,7 @@ export function useFile() {
     filePath,
     isDirty,
     setContent,
+    updateContent,
     newFile,
     openFile,
     saveFile,

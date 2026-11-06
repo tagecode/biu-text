@@ -11,12 +11,15 @@ import { StatusBar } from '@/components/StatusBar'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/Toaster'
+import { UploadIndicator } from '@/components/UploadIndicator'
 import { useFile } from '@/hooks/useFile'
 import { useTheme } from '@/hooks/useTheme'
 import { useAppearanceSettings } from '@/hooks/useAppearanceSettings'
 import { useLoginItem } from '@/hooks/useLoginItem'
 import { useWordCount } from '@/hooks/useWordCount'
 import { useNotifications } from '@/hooks/useNotifications'
+import { useImageHost } from '@/hooks/useImageHost'
+import { useImageUpload } from '@/hooks/useImageUpload'
 import { buildExportHtmlDocument } from '@/lib/export-document'
 import { insertImageLinks } from '@/lib/image-insert'
 import { insertBlock } from '@/lib/block-insert'
@@ -85,7 +88,7 @@ function readStoredPreviewVisible(): boolean {
 function App() {
   const { t } = useTranslation()
   useNotifications()
-  const { content, filePath, setContent, newFile, openFile, saveFile, saveDocument, autoSave, exportHtml, exportPdf } =
+  const { content, filePath, setContent, updateContent, newFile, openFile, saveFile, saveDocument, autoSave, exportHtml, exportPdf } =
     useFile()
   const { theme, themeMode, setThemeMode, cycleThemeMode } = useTheme()
   const {
@@ -112,6 +115,21 @@ function App() {
   const editorViewRef = useRef<EditorView | null>(null)
   const previewScrollRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  // 重试上传前需要判断占位符是否还在文档里，这里始终指向最新内容
+  const contentRef = useRef(content)
+  useEffect(() => {
+    contentRef.current = content
+  }, [content])
+
+  const { config: imageHost, saveConfig: saveImageHost } = useImageHost()
+  const { startUpload, isCloud } = useImageUpload({
+    hostType: imageHost?.type ?? 'local',
+    insertPlaceholders: (text) => {
+      if (editorViewRef.current) insertBlock(editorViewRef.current, text)
+    },
+    updateContent,
+    getContent: () => contentRef.current
+  })
 
   const [leftPercent, setLeftPercent] = useState(readStoredLeftPct)
   const [previewVisible, setPreviewVisible] = useState(readStoredPreviewVisible)
@@ -174,23 +192,31 @@ function App() {
     if (editorViewRef.current) insertLink(editorViewRef.current, t('editor.linkText'))
   }, [t])
 
-  // 图片一律写进文档同目录的 assets/，所以先确保文档已有落盘路径
+  // 本地模式写进文档同目录的 assets/；云图床模式先插占位符，上传完成后回填 URL
   const handleImageFiles = useCallback(
     async (files: ImageFileInput[]): Promise<string[]> => {
+      if (isCloud) {
+        startUpload(files)
+        return []
+      }
       const path = await saveDocument()
       if (!path) return []
       return window.imageAPI.saveImages(path, files)
     },
-    [saveDocument]
+    [isCloud, startUpload, saveDocument]
   )
 
   const handleInsertImage = useCallback(async () => {
+    if (isCloud) {
+      startUpload(await window.imageAPI.pickImageInputs())
+      return
+    }
     const path = await saveDocument()
     if (!path) return
     const paths = await window.imageAPI.pickImages(path)
     const view = editorViewRef.current
     if (view && paths.length > 0) insertImageLinks(view, paths)
-  }, [saveDocument])
+  }, [isCloud, startUpload, saveDocument])
 
   const handleInsertDiagram = useCallback(() => {
     if (editorViewRef.current) insertBlock(editorViewRef.current, MERMAID_SNIPPET)
@@ -332,6 +358,8 @@ function App() {
           showLineNumbers={showLineNumbers}
           autoSaveSeconds={autoSaveSeconds}
           openAtLogin={openAtLogin}
+          imageHost={imageHost}
+          onSaveImageHost={saveImageHost}
           onClose={() => setSettingsOpen(false)}
           onThemeModeChange={setThemeMode}
           onEditorFontFamilyChange={setEditorFontFamily}
@@ -347,6 +375,7 @@ function App() {
           }}
         />
         <Toaster />
+        <UploadIndicator />
       </div>
     </TooltipProvider>
   )

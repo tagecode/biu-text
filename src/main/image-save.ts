@@ -54,3 +54,24 @@ export function imageFileName(originalName: string, mime: string, used: Set<stri
   if (!ext) return null
   return uniqueImageName(used, sanitizeImageName(originalName), ext)
 }
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/**
+ * 同一次运行内已用过的云端文件名。
+ * 剪贴板图片的文件名都是 image.png，一次粘贴多张会落在同一秒，不加后缀会互相覆盖。
+ */
+const usedCloudNames = new Set<string>()
+
+/** 云端文件名带时间戳前缀，避免同一仓库/图床里同名覆盖 */
+export function cloudImageName(originalName: string, mime: string, at: Date = new Date()): string | null {
+  const name = imageFileName(originalName, mime, new Set())
+  if (!name) return null
+  const stamp = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`
+  const ext = extname(name)
+  const candidate = uniqueImageName(usedCloudNames, `${stamp}-${name.slice(0, name.length - ext.length)}`, ext)
+  usedCloudNames.add(candidate)
+  return candidate
+}

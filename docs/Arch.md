@@ -185,7 +185,9 @@ app.on('window-all-closed') // 非 macOS 退出
 | `windowAPI` | `platform` / `confirmDiscardChanges` / `setTitle` / `onWillClose` / `onNotify` / `confirmClose` / `cancelClose` | 属性 / `invoke` / `send` / 主→渲染 |
 | `languageAPI` | `getSync` / `set` | `sendSync` / `invoke` |
 | `loginAPI` | `get` / `set` | `invoke` |
-| `imageAPI` | `setDocumentPath` / `saveImages` / `pickImages` | `send` / `invoke` / `invoke` |
+| `imageAPI` | `setDocumentPath` / `saveImages` / `pickImages` / `pickImageInputs` | `send` / `invoke` / `invoke` / `invoke` |
+| `imageAPI` | `getHostConfig` / `setHostConfig` / `testHost` / `upload` | `invoke` |
+| `imageAPI` | `onUploadProgress` | 主→渲染 `on`，返回退订函数 |
 
 类型契约维护在 `src/preload/index.d.ts`，通过 `declare global { interface Window { ... } }` 供渲染进程使用，并由 `tsconfig.web.json` 的 `include` 纳入类型检查。
 
@@ -208,7 +210,9 @@ app.on('window-all-closed') // 非 macOS 退出
 | 窗口 | `WINDOW_SET_TITLE` | 渲染 → 主 | `send` |
 | 轻量通知 | `APP_NOTIFY` | 主 → 渲染 | `webContents.send` |
 | 图片目录 | `DOCUMENT_SET_PATH` | 渲染 → 主 | `send` |
-| 图片写入 | `IMAGE_SAVE`、`IMAGE_PICK` | 渲染 → 主 | `invoke/handle` |
+| 图片写入 | `IMAGE_SAVE`、`IMAGE_PICK`、`IMAGE_PICK_INPUT` | 渲染 → 主 | `invoke/handle` |
+| 云图床 | `IMAGE_HOST_GET`、`IMAGE_HOST_SET`、`IMAGE_HOST_TEST`、`IMAGE_UPLOAD` | 渲染 → 主 | `invoke/handle` |
+| 上传进度 | `IMAGE_UPLOAD_PROGRESS` | 主 → 渲染 | `webContents.send` |
 | 主题 | `THEME_GET`、`THEME_SET`、`THEME_CHANGED` | 双向 | `invoke` / `send` / `send` |
 | 语言 | `LANGUAGE_GET`、`LANGUAGE_SET` | 渲染 → 主 | `sendSync` / `invoke` |
 | 开机自启 | `LOGIN_GET`、`LOGIN_SET` | 渲染 → 主 | `invoke` |
@@ -282,6 +286,9 @@ biu-text/
 │   ├── main/image-path.ts         # 预览图片的路径解析与目录白名单
 │   ├── main/image-save.ts         # 图片落盘：MIME/扩展名白名单、文件名清洗、重名递增
 │   ├── main/export-image.ts       # 导出前把相对图片内联成 data URI
+│   ├── main/image-host-store.ts   # 图床配置读写（image-host.json），token 走 safeStorage
+│   ├── main/http-upload.ts        # 分块写入 + 背压的上传客户端（进度回调、超时）
+│   ├── main/image-host-providers.ts # GitHub Contents / 自定义 multipart 上传与连接测试
 │   ├── preload/
 │   │   ├── index.ts               # contextBridge 门面
 │   │   └── index.d.ts             # window.* 全局类型声明
@@ -289,6 +296,7 @@ biu-text/
 │   │   ├── ipc-channels.ts        # IPC 常量
 │   │   ├── image-url.ts           # 相对路径 → biu-image:// 改写 + DOMPurify URI 白名单
 │   │   ├── image-input.ts         # 渲染 → 主传递图片字节的类型契约
+│   │   ├── image-host.ts          # 图床配置类型、脱敏、header 文本互转、序列化、HTTPS 校验
 │   │   ├── notification.ts        # 主 → 渲染的轻量通知载荷类型（level/title/description）
 │   │   ├── diagram.ts             # 图表块结构 + 缓存键
 │   │   ├── editor-preferences.ts  # Tab/行高/行号/自动保存的归一化
@@ -315,8 +323,9 @@ biu-text/
 │           │   ├── Toolbar/       # 文件/导出/格式化/设置
 │           │   ├── Splitter/      # Pointer Events 拖拽分隔条
 │           │   ├── StatusBar/     # 光标、字数、编码、语言、字号、主题
-│           │   ├── SettingsPanel/ # 设置弹层
-│           │   ├── Toaster.tsx    # 右上角 Toast 列表（读 toast-store）
+│           │   ├── SettingsPanel/ # 设置弹层（外观/编辑器/图床；ImageHostSettings 为图床子表单）
+│           │   ├── Toaster.tsx    # 右上角 Toast 列表（读 toast-store，支持动作按钮）
+│           │   ├── UploadIndicator.tsx # 右下角上传进度卡（读 upload-store）
 │           │   └── ui/            # shadcn 基础组件
 │           ├── hooks/
 │           │   ├── useFile.ts           # 文档状态与文件操作
@@ -327,6 +336,9 @@ biu-text/
 │           │   ├── useWordCount.ts      # 中英分计
 │           │   ├── useToast.ts          # useSyncExternalStore 订阅 toast-store
 │           │   ├── useNotifications.ts  # 订阅 windowAPI.onNotify 并入队 Toast
+│           │   ├── useImageHost.ts      # 图床配置加载与保存
+│           │   ├── useImageUpload.ts    # 占位符上传编排、进度订阅、失败重试
+│           │   ├── useUploads.ts        # useSyncExternalStore 订阅 upload-store
 │           │   └── useDebounce.ts       # 通用防抖
 │           ├── lib/
 │           │   ├── markdown.ts          # markdown-it 单例与插件（含 mermaid 占位 fence 规则）
@@ -335,7 +347,9 @@ biu-text/
 │           │   ├── image-insert.ts      # 在光标处插入 ![](assets/…)
 │           │   ├── block-insert.ts      # 块级内容的插入位置计算（图片、Mermaid 围栏共用）
 │           │   ├── search-panel.ts      # 打开替换面板并聚焦
-│           │   ├── toast-store.ts       # 模块级 Toast 队列：3 秒、最多 3 条
+│           │   ├── toast-store.ts       # 模块级 Toast 队列：3 秒、最多 3 条，可带动作
+│           │   ├── upload-placeholder.ts# 上传占位符的插入/替换/移除与 Markdown 生成
+│           │   ├── upload-store.ts      # 模块级上传进度表（按 uploadId）
 │           │   └── utils.ts             # cn() 等
 │           └── types/vendor.d.ts
 └── tsconfig.json / tsconfig.node.json / tsconfig.web.json
@@ -440,6 +454,7 @@ CodeMirror onChange
 - `components/ui/toast.tsx` 包一层 Radix Toast（Arch R14 登记的已安装依赖），`toastVariants` 用 `cva` 区分 info / success / error 三档边框；`components/Toaster.tsx` 负责图标、标题、描述与关闭按钮，并按 level 取 lucide 图标。
 - 文案统一走 i18n（`notify.exported`、`notify.close`，以及复用既有的 `image.saveFailed`、`dialog.exportHtmlFailed`、`dialog.exportPdfFailed`），主进程负责拼出最终文案。
 - `Toaster` 挂在 `App` 的 `TooltipProvider` 内、布局容器末尾；viewport 定位 `fixed top-12 right-3 z-[60]`，避开工具栏。
+- **动作按钮**（v0.5）：`ToastInput.action = { label, onClick }`，`Toaster` 渲染 `ToastAction`（Radix `altText` 取同一 label）。上传失败用它承载「重试」，并把该条 Toast 的时长放宽到 8 秒（`RETRY_TOAST_DURATION`）。
 
 ---
 
@@ -662,6 +677,8 @@ Editor 的 paste 捕获 / drop / 工具栏「插入图片」
 - **文件名清洗**（`src/main/image-save.ts`）：取 basename → 去扩展名 → 去 `: * ? " < > |` 与控制字符 → 空白转 `-` → 去首尾点和空格 → 截断 60 字符 → 为空则回退 `image`。路径分隔符在 basename 阶段就已消除，`../../etc/passwd.png` 只会得到 `passwd`。
 - **插入位置**（`src/renderer/src/lib/block-insert.ts`，图片与 Mermaid 共用）：当前行还有其他文字时前后补换行，避免块内容挤进段落；多张图片一次插入，整段只是一条撤销记录。`alt` 取文件名去扩展名。
 
+> 云图床模式下这条链路整体让位：`App.handleImageFiles` 判断 `isCloud` 后直接走 `useImageUpload`，不调用 `saveDocument()`（云端不需要先给文档落盘），也不写 `assets/`。详见 §16.2。
+
 ---
 
 ## 9. 文档生命周期
@@ -878,10 +895,15 @@ CodeMirror 的面板文案不走 i18next，而是通过 `EditorState.phrases.of(
 | `contextIsolation: true` | 主窗口 webPreferences | 隔离预加载上下文 |
 | `nodeIntegration: false` | 主窗口 / 打印窗口 | 渲染进程无 Node |
 | preload 白名单 | `src/preload/index.ts` | 仅暴露 6 个门面，不暴露 `ipcRenderer` |
-| CSP | `src/renderer/index.html` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: blob: https: biu-image:` |
+| CSP | `src/renderer/index.html` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: blob: https: http://127.0.0.1:* http://localhost:* biu-image:` |
 | HTML 消毒 | `Preview`、`export-document` | DOMPurify，允许 `target/rel` 属性；预览侧另放行 `biu-image:` 协议 |
 | 图片读取白名单 | `src/main/image-path.ts` | 仅限当前文档目录内的相对路径，扩展名必须为图片，`realpath` 兜底防软链接逃逸 |
 | 图片写入白名单 | `src/main/image-save.ts` | 只写 `<文档目录>/assets/`；文件名取 basename 后清洗，MIME 与扩展名都须命中图片类型，不合法直接拒绝 |
+| 图床凭证加密 | `src/main/image-host-store.ts` | token 经 `safeStorage.encryptString` 后以 base64 落盘到 `image-host.json`；密钥环不可用时退化为明文并在 JSON 中标记 `enc: false` |
+| 凭证不出主进程 | `shared/image-host.ts`（`toImageView`）/ preload | 渲染进程只拿 `tokenMasked`（`••••1234`）与 `tokenSaved`；回传脱敏值或空值视为"不修改" |
+| 上传端点约束 | `shared/image-host.ts`（`isSecureEndpoint`） | 只放行 `https:`，`http:` 仅限 `127.0.0.1`/`localhost`/`::1`，防止明文外发凭证 |
+| 上传请求在主进程 | `main/image-host-providers.ts` | `connect-src` 保持 `'self'`，渲染进程无法自行发请求；自定义图床的 `content-type` 由主进程强制覆盖为 multipart，用户 header 无法改写包体边界 |
+| 上传体积上限 | `src/main/index.ts`（`MAX_UPLOAD_BYTES`） | 单张 10 MB，超出直接拒绝并回传本地化错误 |
 | 外部链接 | `setWindowOpenHandler` → `shell.openExternal`，`action: 'deny'` | 阻断应用内开窗 |
 | 打印窗口隔离 | `sandbox: true` + 无 preload | 仅用于 `printToPDF` |
 | 文件操作集中于主进程 | 所有 fs 在 `src/main/index.ts` | 渲染进程无路径直通写权限 |
@@ -894,6 +916,7 @@ CodeMirror 的面板文案不走 i18next，而是通过 `EditorState.phrases.of(
 4. **HTTPS 图片无来源限制**：`img-src` 中的 `https:` 允许文档引用任意远端图片，会向第三方泄露 IP 与阅读行为；若后续需要收紧，可改为用户可配置的域名白名单。
 5. **`sendSync` 启动调用**：同步 IPC 在主进程繁忙时会阻塞渲染进程启动；当前仅一次、成本可接受，但不应扩散。
 6. **无进程级异常上报**：错误仅通过 `dialog.showErrorBox` 呈现，缺少结构化日志（§17 R11）。
+7. **`safeStorage` 不可用时 token 明文落盘**：部分 Linux 桌面没有密钥环，`isEncryptionAvailable()` 为 false，此时 `image-host.json` 中的 token 以明文保存并标记 `enc: false`；当前设置面板只展示脱敏值，界面没有提示这一降级，后续应在保存时告知用户。
 
 ---
 
@@ -1051,38 +1074,52 @@ renderMarkdown(content, { diagrams })        // 保持同步、纯函数
 
 **职责划分**：渲染进程负责捕获（粘贴/拖拽）与 Markdown 插入；**主进程负责上传与凭证**，渲染进程永不接触密钥。
 
-**现状**：捕获、落盘与插入已落地（本地存储，写 `<文档目录>/assets/`，见 §8.9）；下图为云端图床的目标形态，`IMAGE_UPLOAD` 与 provider 注册表尚未实现。
+**现状（v0.5）**：捕获、本地落盘（`<文档目录>/assets/`，§8.9）与云图床均已落地。云图床支持 **GitHub 仓库**与**自定义 HTTP 接口**两类，其余厂商（OSS/COS/七牛/又拍）按同一 provider 形态后续补齐。
 
 ```text
-Editor DOM 事件（paste / drop）              // 已实现：本地写入
-  └─ 取得 File/Blob
-  └─ 插入占位符 ![...](uploading:{id})        // 未实现：本地写入是同步落盘后直接插入最终路径
-  └─ invoke IMAGE_UPLOAD { bytes, mime, hostType }
-        └─ 主进程 providerRegistry[hostType].upload()
-             ├─ 解密凭证（safeStorage）
-             ├─ HTTPS 上传，进度通过 IMAGE_UPLOAD_PROGRESS 回推
-             └─ 返回 url
-  └─ 回填占位符为真实 URL（失败则保留占位符 + 重试入口）
+设置面板（SettingsPanel/ImageHostSettings）
+  └─ imageAPI.setHostConfig(view)             [invoke IMAGE_HOST_SET]
+        └─ 主进程 mergeImageView → safeStorage 加密 token → image-host.json
+  └─ imageAPI.testHost(draft)                 [invoke IMAGE_HOST_TEST]
+        └─ 只测当前草稿、不落盘（主进程用 mergeImageView 补上未改动的令牌）
+        └─ GitHub: GET /repos/{repo}；自定义: 真传一张 1×1 PNG
+
+Editor DOM 事件（paste / drop）或工具栏「插入图片」
+  └─ 取得 ImageFileInput[]（name/mime/bytes）
+  └─ 渲染进程先插入占位符 ![...](uploading:{id})   // lib/upload-placeholder.ts
+      预览区把 `uploading:` 地址渲染成脉冲占位块，不显示裂图
+  └─ 逐张 invoke IMAGE_UPLOAD { uploadId, name, mime, bytes }
+        └─ 主进程 uploadImage(config, input, onProgress)
+             ├─ github: PUT api.github.com/repos/{repo}/contents/{dir}/{name}
+             └─ custom: POST {url}（multipart/form-data）
+             ├─ 进度通过 IMAGE_UPLOAD_PROGRESS 按 uploadId 回推
+             └─ 返回 { ok, url } 或 { ok:false, error }
+  └─ 成功：把占位符整段替换成 ![alt](url)
+     失败：保留占位符 + 8 秒失败 Toast（带「重试」动作）
 ```
 
-**Provider 接口（规划）**
+**实现形态**
 
-```ts
-export interface ImageHostProvider {
-  type: 'local' | 'oss' | 'cos' | 'qiniu' | 'upyun' | 'github' | 'custom'
-  validateConfig(cfg: unknown): cfg is ImageHostConfig
-  upload(input: { bytes: Uint8Array; mime: string; fileName: string }, cfg: ImageHostConfig): Promise<{ url: string }>
-  testConnection?(cfg: ImageHostConfig): Promise<boolean>
-}
-```
+| 文件 | 职责 |
+|------|------|
+| `shared/image-host.ts` | 配置类型、默认值、归一化、脱敏、header 文本互转、JSON 点路径、`isSecureEndpoint`、序列化（`toStoredConfig`/`fromStoredConfig`） |
+| `main/image-host-store.ts` | `image-host.json` 读写；token 走 `safeStorage.encryptString`，密钥环不可用时退化为明文（`enc: false`） |
+| `main/http-upload.ts` | `node:https`/`node:http` 分块写入（64 KiB + `drain` 背压）产生进度，60 s 超时 |
+| `main/image-host-providers.ts` | `uploadToGithub` / `uploadToCustom` / `uploadImage` 分派 / `testImageHost` |
+| `renderer/lib/upload-placeholder.ts`、`upload-store.ts`、`hooks/useImageUpload.ts` | 占位符增删、进度表、上传编排与失败重试 |
+| `renderer/components/UploadIndicator.tsx` | 右下角进度卡（`role="progressbar"`） |
 
 **关键架构约束**
 
-1. **CSP**：已显式声明 `img-src data: blob: https: biu-image:`，远程图片在预览区可加载；`connect-src` 仍保持 `'self'`，即上传请求必须由主进程发起。
-2. **本地图片**：读写两侧都已落地——读走 `biu-image://`（§8.5），写走 `IMAGE_SAVE` 直接落盘（§8.9），读写范围都限制在当前文档目录内。云上传落地时复用同一套路径解析即可把本地文件读成字节流，无需再开新协议。
-3. **凭证存储**：`safeStorage.encryptString` + 配置文件；当前项目无 `electron-store`，需新增或自研 JSON 读写（与 `language.json` 一致的最小实现）。
-4. **错误语义**：按 PRD Q10，上传失败**不降级**到本地 `assets/`，保留占位符与重试。
-5. **进度通道**：复用 `webContents.send`，一次性请求 + 多次进度事件，需为每次上传分配 `uploadId` 避免串扰。
+1. **CSP**：已显式声明 `img-src data: blob: https: http://127.0.0.1:* http://localhost:* biu-image:`，远程图片在预览区可加载；`connect-src` 仍保持 `'self'`，即上传请求必须由主进程发起。
+2. **本地图片**：读写两侧都已落地——读走 `biu-image://`（§8.5），写走 `IMAGE_SAVE` 直接落盘（§8.9）；云端模式不落盘，`IMAGE_PICK_INPUT` 直接把字节交回渲染进程。
+3. **凭证存储**：`safeStorage.encryptString` + `image-host.json`；渲染进程只拿 `ImageHostConfigView`（`tokenMasked: '••••1234'`、`tokenSaved`），脱敏值或空值回传时视为"不修改"。
+4. **端点约束**：`isSecureEndpoint` 只放行 `https:`，`http:` 仅限回环地址（本地联调）。自定义图床的 `content-type` 由主进程强制覆盖为带 boundary 的 multipart，避免用户 header 破坏包体。
+5. **错误语义**：按 PRD Q10，上传失败**不降级**到本地 `assets/`，保留占位符与重试。
+6. **进度通道**：一次请求 + 多次 `IMAGE_UPLOAD_PROGRESS`，`uploadId` 关联，失败重试沿用同一 `uploadId`，避免与其它并发上传串扰。
+7. **云端文件名**：`时间戳-清洗后的原名`；剪贴板图片的文件名都是 `image.png`，同秒批量上传时按运行内已用名追加 `-2`、`-3` 后缀，避免 GitHub Contents API 因同名覆盖返回 422。
+
+**后续**：OSS/COS/七牛/又拍没有独立抽象层，只需在 `uploadImage` 分派中新增分支；若分支继续增多，再抽 `ImageHostProvider` 注册表。
 
 ### 16.3 编辑器内联渲染（Typora 风格）
 
@@ -1125,7 +1162,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | 版本 | 能力 | 主要改动点 | 架构风险 |
 |------|------|-----------|----------|
 | v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、工具栏「插入 Mermaid」（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts`（`MERMAID_SNIPPET`）+ `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`block-insert.ts`（块插入）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
-| v0.5 | 云图床、批量上传 | 主进程 provider 注册表、`safeStorage`、配置模块、进度 IPC | 凭证安全、网络失败语义 |
+| v0.5 | 云图床（✅ GitHub + 自定义 HTTP 已落地）、上传占位符与重试（✅）、进度条（✅）、测试连接（✅）、批量上传（✅ 多选/多文件粘贴）、其余厂商图床（未做） | `shared/image-host.ts`、`main/image-host-store.ts`、`main/http-upload.ts`、`main/image-host-providers.ts`、`IMAGE_HOST_*` / `IMAGE_UPLOAD` / `IMAGE_UPLOAD_PROGRESS` 通道、`useImageHost` / `useImageUpload` / `upload-placeholder` / `upload-store`、`SettingsPanel/ImageHostSettings`、`UploadIndicator`、Toast 动作按钮 | 凭证安全（已用 `safeStorage`，明文降级见 §13.3）、网络失败语义（已定：保留占位符 + 重试）、进度串扰（已用 `uploadId` 隔离） |
 | v1.0 | 内联渲染、ChartJS、Graphviz、导出增强 | CodeMirror ViewPlugin、渲染器注册表、导出管线 | 编辑体验回归、性能、缓存一致性 |
 | v1.1 | 多标签、文件树、Excalidraw | 文档模型重构、侧边栏布局、独立编辑窗口 | 单文档假设、状态迁移 |
 
@@ -1149,7 +1186,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R12 | ~~新建/打开不提示保存脏内容~~ **已修复** | 可能丢失未保存修改 | `useFile` 抽出 `confirmLeaveCurrentDocument()`，新建/打开/打开最近文件/关闭四条路径共用；选"保存"时执行真实写盘，写盘失败或另存为被取消则中止操作 |
 | R13 | 预览外链点击处理为兜底空操作，依赖主进程拦截 | 行为耦合、可读性差 | 明确由 `setWindowOpenHandler` 负责，移除或注释化渲染层监听 |
 | R14 | 5 个 Radix 包（dialog、dropdown-menu、scroll-area、toast、tooltip）已装未用 | 增大依赖体积与安装时间 | toast 已在 v0.4 用于轻量通知（§6.6），tooltip 用于工具栏提示；剩余包按需移除，或在引入对应能力时复用 |
-| R15 | 图片资产无生命周期管理 | 移动/重命名文档后 `assets/` 里的图片与 Markdown 断链；删除图片行不会回收文件；导出把图片内联成 `data:` 会让大图文档的 HTML/PDF 明显变大 | v0.5 做云图床时顺带引入"文档 → 资产"归属与孤儿清理；导出侧可加"内联/外链"开关 |
+| R15 | 图片资产无生命周期管理（仅本地模式） | 移动/重命名文档后 `assets/` 里的图片与 Markdown 断链；删除图片行不会回收文件；导出把图片内联成 `data:` 会让大图文档的 HTML/PDF 明显变大 | v0.5 的云图床模式已不再写本地 `assets/`，断链与回收问题因此只影响本地模式；仍需补"文档 → 资产"归属与孤儿清理。导出侧可加"内联/外链"开关 |
 
 ---
 

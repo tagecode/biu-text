@@ -24,8 +24,8 @@
 | 最近文件（含打开时间） | ✅ 已实现 | 菜单最近 10 个文件 + 时间戳 |
 | 导出 HTML/PDF | ✅ 已实现 | ⌘⇧E / ⌘⇧P，printToPDF |
 | 预览区通过图标按钮打开/隐藏 | ✅ 已实现 | 工具栏图标操作，状态持久化 |
-| 独立设置面板 | ✅ 已实现 | 语言、开机自启、自动保存、Tab 宽度、行高、行号、图片存储方式 |
-| 图片粘贴/上传（PicGo 风格） | 🟡 本地已实现 | 粘贴/拖放/工具栏插入写入文档同目录 `assets/`，导出内联图片；云图床见 F-09 与 v0.5 |
+| 独立设置面板 | ✅ 已实现 | 语言、开机自启、自动保存、Tab 宽度、行高、行号、图床（存储方式与凭证） |
+| 图片粘贴/上传（PicGo 风格） | ✅ 已实现（v0.5） | 本地模式写 `assets/`；云图床支持 GitHub 与自定义 HTTP，占位符 + 进度 + 失败重试（F-09） |
 | 图表支持（Mermaid / ChartJS / Graphviz） | 🟡 Mermaid 已实现 | 预览与导出均为内联 SVG，失败降级为源码 + 错误提示；ChartJS/Graphviz 计划 v1.0，见 F-10 |
 | 编辑器内图表可视化（Typora 风格） | ❌ 未实现 | 规划见 F-11 |
 | 多标签页 | ❌ 未实现 | 规划见 v1.1 |
@@ -79,7 +79,7 @@ BiuText 是一款面向开发者和写作者的**现代跨平台桌面端 Markdo
 | IPC 通信 | Electron contextBridge | 安全隔离的主/渲染进程通信 |
 | 国际化 | react-i18next + i18next | 多语言支持（简体中文、繁体中文、英文） |
 | **图表渲染** | **Mermaid（✅ 已引入）+ react-chartjs-2、Excalidraw（规划）** | **Mermaid 流程图/时序图已支持；数据图表与手绘图规划 v1.0+** |
-| **图片管理** | **PicGo Core / 自研上传模块** | **本地/云存储自动上传、CDN 集成（规划 v0.4+，尚未引入依赖）** |
+| **图片管理** | **自研上传模块（✅ 已落地，未引入 PicGo）** | **本地 `assets/` 与云图床自动上传；GitHub / 自定义 HTTP 已支持，其它厂商与 CDN 集成待补** |
 | **编辑器增强** | **CodeMirror 6 Widget / Decoration API** | **图片/图表内联可视化显示（规划 v1.0）** |
 
 ---
@@ -257,14 +257,17 @@ export const messages = {
 
 **目标**：对标 PicGo 的图片管理能力，让用户粘贴/拖拽图片后自动上传到图床并插入 Markdown 链接。
 
-**当前进度**：本地存储模式已落地（v0.4）——粘贴/拖放/工具栏插入都会写入文档同目录的 `assets/` 并插入相对路径，导出时内联为 `data:` URI；下文的云图床、压缩、重命名规则与上传历史属于 v0.5 及以后。
+**当前进度**：
+- v0.4：本地存储模式——粘贴/拖放/工具栏插入都会写入文档同目录的 `assets/` 并插入相对路径，导出时内联为 `data:` URI。
+- v0.5：云图床——支持 **GitHub 仓库**与**自定义 HTTP 接口**两类；粘贴/拖放/工具栏插入先插入占位符 `![uploading](uploading:{id})`，上传成功后原地替换为远端 URL，失败保留占位符并给出可重试的错误提示；上传过程有字节进度条；设置面板可配置、测试连接，token 用系统密钥环加密保存。
+- 未做：OSS/COS/七牛/又拍等厂商图床、上传前压缩、重命名规则、上传历史。
 
 **核心功能**：
 
 1. **粘贴上传**：
    - `⌘V` 粘贴剪贴板图片，自动触发上传流程
-   - 上传中显示占位符（如 `![uploading...]()`），上传成功后替换为实际 URL
-   - 上传失败显示错误提示，保留本地 base64 或路径作为降级方案
+   - 上传中显示占位符 `![uploading](uploading:{id})`，上传成功后替换为实际 URL
+   - 上传失败显示错误提示（带「重试」动作），**保留占位符**；按 Q10 的决策不降级为本地 `assets/`，避免"文档里既有远端链接又有本地路径"的混合状态
 
 2. **拖拽上传**：
    - 编辑区支持拖拽图片文件（`.png`、`.jpg`、`.gif`、`.webp`、`.svg`）
@@ -272,22 +275,22 @@ export const messages = {
    - 松开后自动上传并插入链接
 
 3. **图床支持**（可扩展）：
-   | 图床类型 | 说明 |
-   |---------|------|
-   | 本地存储 | 保存到当前文档目录的 `assets/` 文件夹，使用相对路径 |
-   | 阿里云 OSS | AccessKey + Bucket 配置 |
-   | 腾讯云 COS | SecretId + Bucket 配置 |
-   | 七牛云 Kodo | AccessKey + Bucket 配置 |
-   | 又拍云 USS | Operator + Password 配置 |
-   | GitHub | Token + 仓库路径（通过 GitHub API 上传到 repo） |
-   | 自定义图床 | 用户配置 POST 接口 URL + 请求头/参数 |
+   | 图床类型 | 状态 | 说明 |
+   |---------|------|------|
+   | 本地存储 | ✅ v0.4 | 保存到当前文档目录的 `assets/` 文件夹，使用相对路径 |
+   | GitHub | ✅ v0.5 | Token + 仓库/分支/目录（Contents API），需 contents 写权限 |
+   | 自定义图床 | ✅ v0.5 | 配置 POST 地址、文件字段名、请求头，按响应 JSON 的点路径（如 `data.url`）取 URL；仅允许 https，本机回环地址可用 http |
+   | 阿里云 OSS | ⬜ 计划 | AccessKey + Bucket 配置 |
+   | 腾讯云 COS | ⬜ 计划 | SecretId + Bucket 配置 |
+   | 七牛云 Kodo | ⬜ 计划 | AccessKey + Bucket 配置 |
+   | 又拍云 USS | ⬜ 计划 | Operator + Password 配置 |
 
-4. **图床配置面板**（设置面板新增"图床"标签页）：
-   - 选择默认图床类型（下拉菜单）
-   - 各图床的凭证输入框（加密存储）
-   - 测试连接按钮（验证配置是否正确）
-   - 图片压缩选项：上传前自动压缩（开关 + 质量滑块 60%～100%）
-   - 图片重命名规则：时间戳 / UUID / 原文件名
+4. **图床配置面板**（设置面板「图片」分组）：
+   - ✅ 选择存储方式（本地 / GitHub / 自定义接口），按类型展开对应字段
+   - ✅ 各图床的凭证输入框（`safeStorage` 加密存储，回显为 `••••1234`，留空表示沿用）
+   - ✅ 测试连接按钮：GitHub 校验仓库可访问，自定义图床真传一张 1×1 PNG 并解析返回 URL
+   - ⬜ 图片压缩选项：上传前自动压缩（开关 + 质量滑块 60%～100%）
+   - ⬜ 图片重命名规则：时间戳 / UUID / 原文件名（当前云端固定为 `时间戳-清洗后的原名`）
 
 5. **上传历史**（v1.1 增强）：
    - 菜单 → 图片历史，显示最近 50 张上传记录
@@ -295,13 +298,13 @@ export const messages = {
    - 右键菜单：复制 URL、复制 Markdown、删除记录
 
 6. **安全性**：
-   - 图床凭证使用 Electron `safeStorage` 加密存储
-   - 上传前检查文件大小（默认限制 10MB，可配置）
-   - HTTPS 上传，防止中间人攻击
+   - 图床凭证使用 Electron `safeStorage` 加密存储，渲染进程只能拿到脱敏值；上传请求只由主进程发起
+   - 上传前检查文件大小（当前固定 10 MB，可配置项待补）
+   - 仅允许 HTTPS 端点，本机回环地址（`127.0.0.1`/`localhost`/`::1`）例外，便于本地联调
 
 **技术实现方案**：
-- **方案一（推荐）**：集成 PicGo Core（`picgo`），复用其成熟的图床插件生态
-- **方案二**：自研轻量上传模块，仅支持主流图床（减少依赖体积）
+- ❌ 方案一：集成 PicGo Core（`picgo`），复用其成熟的图床插件生态——放弃，依赖体积与上传链路都不受控
+- ✅ 方案二（已采用）：自研轻量上传模块，主进程持有凭证并直接发请求，当前只覆盖 GitHub 与自定义 HTTP
 
 ---
 
@@ -546,7 +549,7 @@ export const messages = {
 | Beta | v0.2 | 代码高亮、数学公式、脚注/Emoji/任务列表、查找、主题与外观 | - | ✅ 已完成 |
 | GA | v0.3 | **多语言**（简中/繁中/英文）、导出 HTML/PDF、最近文件、替换、设置面板 | - | ✅ 已完成（v0.3.1） |
 | 图表 | **v0.4** | Mermaid 渲染、本地图片粘贴/拖放（`assets/`）、图床设置 UI、Toast 通知 | **P0** | ✅ 已完成 |
-| 图床 | **v0.5** | 云图床上传（阿里云 OSS / 腾讯云 COS / 七牛 / 又拍 / GitHub / 自定义）、批量上传 | **P1** | 📅 计划中 |
+| 图床 | **v0.5** | 云图床上传（GitHub / 自定义 HTTP 已落地；OSS / COS / 七牛 / 又拍顺延）、占位符 + 进度 + 重试、批量上传 | **P1** | ✅ 已完成（部分厂商图床未做） |
 | 可视化 | **v1.0** | Typora 风格内联渲染、ChartJS、Graphviz DOT、导出预览模式 | **P1-P2** | 📅 计划中 |
 | 增强 | **v1.1** | 多标签页、文件树侧边栏、Excalidraw、插件机制（预研） | **P2** | 📅 计划中 |
 
@@ -574,13 +577,14 @@ export const messages = {
 
 #### v0.5（云图床，P1）
 **核心目标**：图片上传云端
-- [ ] 图床后端：F-09 列出的全部云图床 + 自定义 HTTP 图床
-- [ ] 上传进度条与重试机制
-- [ ] 凭证管理：`safeStorage` 加密存储 AK/SK
-- [ ] 批量上传（选中多张本地图片，Ctrl+V 批量粘贴）
-- [ ] 测试连接功能
+- [x] 图床后端：GitHub 仓库 + 自定义 HTTP 图床（OSS/COS/七牛/又拍顺延）
+- [x] 上传进度条与重试机制（失败保留占位符，Toast 内「重试」）
+- [x] 凭证管理：`safeStorage` 加密存储 token，渲染进程只见脱敏值
+- [x] 批量上传（多选文件 / 多文件一次粘贴，各自独立占位符与进度）
+- [x] 测试连接功能
+- [ ] 上传前压缩、重命名规则、上传历史
 
-**交付标准**：粘贴图片自动上传到云图床并返回 URL；断网/失败时可重试
+**交付标准**：粘贴图片自动上传到云图床并返回 URL；断网/失败时可重试 —— 已达成（GitHub、自定义两种图床均走通占位符 → 上传 → 回填链路）
 
 #### v1.0（可视化增强，P1-P2）
 **核心目标**：Typora 风格 + 更多图表类型
@@ -890,21 +894,17 @@ export function useImageUpload() {
 
 #### C.4 凭证加密存储
 
-> 说明：下述 `store` 指 `electron-store`，当前项目尚未引入该依赖，v0.5 实现时需新增。
+> 说明：v0.5 未引入 `electron-store`，实际实现是手写 JSON 读写（`src/main/image-host-store.ts`，路径 `userData/image-host.json`），加密方式如下。
 
-```typescript
-// 保存配置时加密
-const encrypted = safeStorage.encryptString(JSON.stringify({
-  accessKeyId: 'LTAI***',
-  accessKeySecret: 'secret***'
-}))
-store.set('imageHost.oss.credentials', encrypted.toString('base64'))
+存储形态（`StoredSecret`，只有密文与是否加密两个字段）：
 
-// 读取配置时解密
-const base64 = store.get('imageHost.oss.credentials')
-const decrypted = safeStorage.decryptString(Buffer.from(base64, 'base64'))
-return JSON.parse(decrypted)
+```json
+{ "github": { "repo": "owner/repo", "token": { "enc": true, "value": "<base64 密文>" } } }
 ```
+
+- 保存：`safeStorage.isEncryptionAvailable()` 为真时 `encryptString` 后 base64 落盘并置 `enc: true`；密钥环不可用（部分 Linux 桌面）时退化为明文并置 `enc: false`。
+- 读取：`enc: false` 直接返回明文；`enc: true` 解密失败（换机器、密钥环重置）按"未配置"处理，不抛错、不阻断启动。
+- 渲染进程永远拿不到 `value`，只能看到 `tokenMasked`（`••••1234`）与 `tokenSaved`。
 
 ---
 

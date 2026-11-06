@@ -1,6 +1,13 @@
 import type { AppLanguage } from '../shared/i18n/types'
 import type { ImageFileInput } from '../shared/image-input'
 import type { NotificationPayload } from '../shared/notification'
+import type {
+  ImageHostConfigView,
+  ImageHostTestResult,
+  ImageUploadProgress,
+  ImageUploadRequest,
+  ImageUploadResult
+} from '../shared/image-host'
 
 export {}
 
@@ -54,6 +61,12 @@ interface ImageAPI {
   setDocumentPath: (path: string | null) => void
   saveImages: (documentPath: string, files: ImageFileInput[]) => Promise<string[]>
   pickImages: (documentPath: string) => Promise<string[]>
+  pickImageInputs: () => Promise<ImageFileInput[]>
+  getHostConfig: () => Promise<ImageHostConfigView>
+  setHostConfig: (view: ImageHostConfigView) => Promise<ImageHostConfigView>
+  testHost: (view?: ImageHostConfigView) => Promise<ImageHostTestResult>
+  upload: (request: ImageUploadRequest) => Promise<ImageUploadResult>
+  onUploadProgress: (cb: (progress: ImageUploadProgress) => void) => UnsubFn
 }
 
 declare global {

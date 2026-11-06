@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cloudImageName,
   imageExtensionForMime,
   imageFileName,
   sanitizeImageName,
@@ -55,5 +56,22 @@ describe('imageFileName', () => {
   it('rejects files that are not images', () => {
     expect(imageFileName('notes.md', 'text/markdown', new Set())).toBeNull()
     expect(imageFileName('no-extension', '', new Set())).toBeNull()
+  })
+})
+
+describe('cloudImageName', () => {
+  const at = new Date(2026, 10, 6, 9, 5, 3)
+
+  it('prefixes the sanitized name with a timestamp', () => {
+    expect(cloudImageName('my shot.png', 'image/png', at)).toBe('20261106090503-my-shot.png')
+  })
+
+  it('rejects non-images so the caller skips the upload', () => {
+    expect(cloudImageName('notes.md', 'text/markdown', at)).toBeNull()
+  })
+
+  it('separates same-named images uploaded in the same second', () => {
+    expect(cloudImageName('image.png', 'image/png', at)).toBe('20261106090503-image.png')
+    expect(cloudImageName('image.png', 'image/png', at)).toBe('20261106090503-image-2.png')
   })
 })

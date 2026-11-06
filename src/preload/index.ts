@@ -3,6 +3,13 @@ import { IPC } from '../shared/ipc-channels'
 import type { AppLanguage } from '../shared/i18n/types'
 import type { ImageFileInput } from '../shared/image-input'
 import type { NotificationPayload } from '../shared/notification'
+import type {
+  ImageHostConfigView,
+  ImageHostTestResult,
+  ImageUploadProgress,
+  ImageUploadRequest,
+  ImageUploadResult
+} from '../shared/image-host'
 
 type UnsubFn = () => void
 
@@ -115,7 +122,26 @@ const imageAPI = {
     ipcRenderer.invoke(IPC.IMAGE_SAVE, { documentPath, files }),
 
   pickImages: (documentPath: string): Promise<string[]> =>
-    ipcRenderer.invoke(IPC.IMAGE_PICK, documentPath)
+    ipcRenderer.invoke(IPC.IMAGE_PICK, documentPath),
+
+  pickImageInputs: (): Promise<ImageFileInput[]> => ipcRenderer.invoke(IPC.IMAGE_PICK_INPUT),
+
+  getHostConfig: (): Promise<ImageHostConfigView> => ipcRenderer.invoke(IPC.IMAGE_HOST_GET),
+
+  setHostConfig: (view: ImageHostConfigView): Promise<ImageHostConfigView> =>
+    ipcRenderer.invoke(IPC.IMAGE_HOST_SET, view),
+
+  testHost: (view?: ImageHostConfigView): Promise<ImageHostTestResult> =>
+    ipcRenderer.invoke(IPC.IMAGE_HOST_TEST, view ?? null),
+
+  upload: (request: ImageUploadRequest): Promise<ImageUploadResult> =>
+    ipcRenderer.invoke(IPC.IMAGE_UPLOAD, request),
+
+  onUploadProgress: (cb: (progress: ImageUploadProgress) => void): UnsubFn => {
+    const handler = (_: Electron.IpcRendererEvent, progress: ImageUploadProgress) => cb(progress)
+    ipcRenderer.on(IPC.IMAGE_UPLOAD_PROGRESS, handler)
+    return () => ipcRenderer.removeListener(IPC.IMAGE_UPLOAD_PROGRESS, handler)
+  }
 }
 
 const windowAPI = {

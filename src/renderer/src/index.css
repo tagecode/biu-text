@@ -304,6 +304,24 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* ── 上传中的图片占位符 ───────────────────────────────────────── */
+.biu-uploading {
+  display: inline-block;
+  width: 8rem;
+  height: 2.5rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  vertical-align: middle;
+  animation: biu-uploading-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes biu-uploading-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 /* ── Mermaid 图表（预览与导出共用同一套类名） ────────────────────── */
 .biu-diagram {
   margin: 1.25em 0;
