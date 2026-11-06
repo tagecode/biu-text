@@ -17,6 +17,8 @@ import { useLoginItem } from '@/hooks/useLoginItem'
 import { useWordCount } from '@/hooks/useWordCount'
 import { buildExportHtmlDocument } from '@/lib/export-document'
 import { insertImageLinks } from '@/lib/image-insert'
+import { insertBlock } from '@/lib/block-insert'
+import { MERMAID_SNIPPET } from '@shared/diagram'
 import type { ImageFileInput } from '@shared/image-input'
 
 // ─── Editor formatting helpers ───────────────────────────────────
@@ -187,6 +189,10 @@ function App() {
     if (view && paths.length > 0) insertImageLinks(view, paths)
   }, [saveDocument])
 
+  const handleInsertDiagram = useCallback(() => {
+    if (editorViewRef.current) insertBlock(editorViewRef.current, MERMAID_SNIPPET)
+  }, [])
+
   const getExportTitle = useCallback(() => {
     if (!filePath) return t('app.document')
     const normalized = filePath.replaceAll('\\', '/')
@@ -258,6 +264,7 @@ function App() {
           onCode={handleCode}
           onLink={handleLink}
           onInsertImage={handleInsertImage}
+          onInsertDiagram={handleInsertDiagram}
         />
 
         <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden">

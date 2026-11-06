@@ -545,7 +545,7 @@ export const messages = {
 | MVP | v0.1 | 分栏布局、基础编辑与预览、文件打开/保存 | - | ✅ 已完成 |
 | Beta | v0.2 | 代码高亮、数学公式、脚注/Emoji/任务列表、查找、主题与外观 | - | ✅ 已完成 |
 | GA | v0.3 | **多语言**（简中/繁中/英文）、导出 HTML/PDF、最近文件、替换、设置面板 | - | ✅ 已完成（v0.3.1） |
-| 图表 | **v0.4** | Mermaid 渲染、本地图片粘贴/拖放（`assets/`）、图床设置 UI | **P0** | 🚧 本地图片与 Mermaid 已完成，仅剩「插入 Mermaid」按钮 |
+| 图表 | **v0.4** | Mermaid 渲染、本地图片粘贴/拖放（`assets/`）、图床设置 UI | **P0** | ✅ 已完成 |
 | 图床 | **v0.5** | 云图床上传（阿里云 OSS / 腾讯云 COS / 七牛 / 又拍 / GitHub / 自定义）、批量上传 | **P1** | 📅 计划中 |
 | 可视化 | **v1.0** | Typora 风格内联渲染、ChartJS、Graphviz DOT、导出预览模式 | **P1-P2** | 📅 计划中 |
 | 增强 | **v1.1** | 多标签页、文件树侧边栏、Excalidraw、插件机制（预研） | **P2** | 📅 计划中 |
@@ -567,7 +567,7 @@ export const messages = {
 - [x] **图床设置 UI**（已完成）：「本地」模式可选，云图床选项置灰占位
 - [x] 多语言新增 `diagram.*` 与 `image.*` 分组（已完成）
 - [x] **工具栏新增「插入图片」按钮**（已完成，走系统选图对话框）
-- [ ] 工具栏新增「插入 Mermaid」按钮
+- [x] **工具栏新增「插入 Mermaid」按钮**（已完成，插入最小流程图脚手架，光标落在围栏之后）
 
 **交付标准**：粘贴图片立即可在预览区显示，导出 HTML/PDF 时图片一并内联（✅ 已达成）；输入 `mermaid` 代码块后预览区渲染流程图，语法错误时显示错误提示（✅ 已达成，源码保留 + 错误说明）
 
@@ -798,7 +798,7 @@ export async function hydrateDiagrams(root, blocks, { theme, signal }): Promise<
 | 并发 | mermaid 内部共享状态，并发 `render()` 会互相污染 → 全局串行队列 |
 | 缓存 | 键 `lang + theme + code`，上限 60 条 FIFO |
 | 取消 | 内容/主题/语言变化时 `AbortController.abort()`，旧结果不回填 |
-| 状态 | `host.dataset.state` = `pending` / `ready` / `error` |
+| 状态 | `host.dataset.diagramState`（即 `data-diagram-state`）= `pending` / `ready` / `error`，与占位块上的初始值同名 |
 
 #### B.3 安全性
 

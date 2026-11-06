@@ -326,7 +326,8 @@ biu-text/
 │           │   ├── markdown.ts          # markdown-it 单例与插件（含 mermaid 占位 fence 规则）
 │           │   ├── diagram-hydrate.ts   # 图表异步水合：懒加载、串行队列、缓存、降级
 │           │   ├── export-document.ts   # 独立 HTML 导出模板（导出前同步水合图表）
-│           │   ├── image-insert.ts      # 在光标处插入 ![](assets/…)，必要时换行
+│           │   ├── image-insert.ts      # 在光标处插入 ![](assets/…)
+│           │   ├── block-insert.ts      # 块级内容的插入位置计算（图片、Mermaid 围栏共用）
 │           │   ├── search-panel.ts      # 打开替换面板并聚焦
 │           │   └── utils.ts             # cn() 等
 │           └── types/vendor.d.ts
@@ -585,7 +586,8 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 | 关注点 | 做法 |
 |--------|------|
 | 加载 | `getMermaid()` 首次调用时 `import('mermaid')`，Vite 拆出独立 chunk，仅首次遇到图表才下载 |
-| 初始化 | 只在主题变化时 `mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme, fontFamily: 'inherit' })` |
+| 初始化 | 只在主题变化时 `mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme, fontFamily: 'inherit', htmlLabels: false, flowchart: { htmlLabels: false } })` |
+| 标签 | 必须关掉 `htmlLabels`：默认实现把文字放进 `<foreignObject>` 里的 XHTML，而 `USE_PROFILES: { svg: true }` 只放行 SVG 元素，消毒后节点会变成空框。改成纯 `<text>` 后标签能保住，代价是标签内不能再用 HTML（`<br>` 由 mermaid 转成 `tspan`，仍然可用） |
 | 并发 | mermaid 内部有共享状态，`render()` 并发会互相污染 → 全局串行队列（`renderQueue` 链式 `.then`） |
 | 缓存 | `Map<string, string>`，键为 `lang + theme + code`，上限 60 条、超出按插入顺序淘汰；主题不同即为不同键，天然满足"按主题分键" |
 | 取消 | 每轮水合一个 `AbortController`；`rendered`/`theme`/`i18n.language` 任一变化即 abort，旧结果不再回填 |
@@ -597,6 +599,8 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 **导出**：`buildExportHtmlDocument` 为 async。它在离屏 `div` 内先完成水合，再取 `innerHTML` 拼进模板，因此 HTML/PDF 导出得到的是**内联 SVG** 而非占位块；导出模板的 `<style>` 里也带上 `.biu-diagram*` 规则以保持居中与横向滚动。导出不走缓存命中以外的优化——一次导出只发生一次渲染。
 
 **已知边界**：图表占位块参与滚动同步的 DOM 高度计算，水合完成后高度会变化，滚动同步按比例重算，不会错位但可能有轻微跳动；超大图表（节点数百）会明显占用渲染时间，串行队列意味着它们会互相排队。
+
+**工具栏入口**：工具栏「插入 Mermaid」把 `MERMAID_SNIPPET`（`src/shared/diagram.ts`）经 `insertBlock()` 插到光标处。脚手架是一段能直接渲染的最小流程图，用户在此基础上改，不必先记语法。
 
 ### 8.9 本地图片写入（粘贴 / 拖放 / 工具栏）
 
@@ -619,7 +623,7 @@ Editor 的 paste 捕获 / drop / 工具栏「插入图片」
 - **粘贴**：在捕获阶段拦截（`onPasteCapture`）。CodeMirror 自己的 paste 处理会在冒泡阶段把剪贴板里的文本也插进去，冒泡阶段再拦已经晚了；捕获阶段 `preventDefault + stopPropagation` 才能保证只有图片被处理。
 - **拖放**：`dragover` 必须 `preventDefault` 才允许 drop，同时置上高亮覆盖层；`dragleave` 用 `currentTarget.contains(relatedTarget)` 判断是否真的离开编辑区，避免子元素间移动时闪烁。`drop` 只要有文件就 `preventDefault`（否则 Electron 会导航到被拖入的文件），非图片文件静默丢弃；纯文本拖放不拦截，交还 CodeMirror。
 - **文件名清洗**（`src/main/image-save.ts`）：取 basename → 去扩展名 → 去 `: * ? " < > |` 与控制字符 → 空白转 `-` → 去首尾点和空格 → 截断 60 字符 → 为空则回退 `image`。路径分隔符在 basename 阶段就已消除，`../../etc/passwd.png` 只会得到 `passwd`。
-- **插入位置**（`src/renderer/src/lib/image-insert.ts`）：当前行还有其他文字时前后补换行，避免把图片挤进段落中间；多张图片一次插入，整段只是一条撤销记录。`alt` 取文件名去扩展名。
+- **插入位置**（`src/renderer/src/lib/block-insert.ts`，图片与 Mermaid 共用）：当前行还有其他文字时前后补换行，避免块内容挤进段落；多张图片一次插入，整段只是一条撤销记录。`alt` 取文件名去扩展名。
 
 ---
 
@@ -1083,7 +1087,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 
 | 版本 | 能力 | 主要改动点 | 架构风险 |
 |------|------|-----------|----------|
-| v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts` + `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
+| v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、工具栏「插入 Mermaid」（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts`（`MERMAID_SNIPPET`）+ `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`block-insert.ts`（块插入）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
 | v0.5 | 云图床、批量上传 | 主进程 provider 注册表、`safeStorage`、配置模块、进度 IPC | 凭证安全、网络失败语义 |
 | v1.0 | 内联渲染、ChartJS、Graphviz、导出增强 | CodeMirror ViewPlugin、渲染器注册表、导出管线 | 编辑体验回归、性能、缓存一致性 |
 | v1.1 | 多标签、文件树、Excalidraw | 文档模型重构、侧边栏布局、独立编辑窗口 | 单文档假设、状态迁移 |

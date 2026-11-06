@@ -24,7 +24,11 @@ async function getMermaid(theme: Theme): Promise<MermaidApi> {
       startOnLoad: false,
       securityLevel: 'strict',
       theme: theme === 'dark' ? 'dark' : 'default',
-      fontFamily: 'inherit'
+      fontFamily: 'inherit',
+      // 默认的 htmlLabels 把文字塞进 <foreignObject> 里的 XHTML，会被只放行 SVG 的
+      // DOMPurify 配置整块剥掉，节点变成空框；改成纯 <text> 既保得住也够用
+      htmlLabels: false,
+      flowchart: { htmlLabels: false }
     })
     mermaidTheme = theme
   }
@@ -60,7 +64,7 @@ function showSource(host: HTMLElement, block: DiagramBlock): void {
   code.textContent = block.code
   pre.append(code)
   host.replaceChildren(pre)
-  host.dataset.state = 'pending'
+  host.dataset.diagramState = 'pending'
 }
 
 function mountSvg(host: HTMLElement, svg: string): void {
@@ -68,7 +72,7 @@ function mountSvg(host: HTMLElement, svg: string): void {
   wrap.className = 'biu-diagram-svg'
   wrap.innerHTML = svg
   host.replaceChildren(wrap)
-  host.dataset.state = 'ready'
+  host.dataset.diagramState = 'ready'
 }
 
 function mountError(host: HTMLElement, error: unknown): void {
@@ -79,7 +83,7 @@ function mountError(host: HTMLElement, error: unknown): void {
   detail.textContent = error instanceof Error ? error.message : String(error)
   box.append(detail)
   host.append(box)
-  host.dataset.state = 'error'
+  host.dataset.diagramState = 'error'
 }
 
 export interface HydrateDiagramsOptions {

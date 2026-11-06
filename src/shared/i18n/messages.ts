@@ -70,6 +70,7 @@ const zhCN = {
     code: '行内代码',
     link: '插入链接',
     insertImage: '插入图片',
+    insertDiagram: '插入 Mermaid',
     wordSummary: '{{words}} 词 · {{chars}} 字符'
   },
   settings: {
@@ -246,6 +247,7 @@ const enUS = {
     code: 'Inline Code',
     link: 'Insert Link',
     insertImage: 'Insert Image',
+    insertDiagram: 'Insert Mermaid Diagram',
     wordSummary: '{{words}} words · {{chars}} characters'
   },
   settings: {
@@ -422,6 +424,7 @@ const zhTW = {
     code: '行內程式碼',
     link: '插入連結',
     insertImage: '插入圖片',
+    insertDiagram: '插入 Mermaid',
     wordSummary: '{{words}} 個詞 · {{chars}} 個字元'
   },
   settings: {

@@ -12,7 +12,8 @@ import {
   Italic,
   Code,
   Link,
-  ImagePlus
+  ImagePlus,
+  Workflow
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,7 @@ interface ToolbarProps {
   onCode: () => void
   onLink: () => void
   onInsertImage: () => void
+  onInsertDiagram: () => void
   onOpenSettings: () => void
   wordCount: WordCountResult
 }
@@ -57,6 +59,7 @@ export function Toolbar({
   onCode,
   onLink,
   onInsertImage,
+  onInsertDiagram,
   onOpenSettings,
   wordCount
 }: ToolbarProps) {
@@ -116,6 +119,9 @@ export function Toolbar({
       </ToolbarButton>
       <ToolbarButton label={t('toolbar.insertImage')} onClick={onInsertImage}>
         <ImagePlus className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton label={t('toolbar.insertDiagram')} onClick={onInsertDiagram}>
+        <Workflow className="size-3.5" />
       </ToolbarButton>
 
       {/* 右侧：字数统计摘要 */}
