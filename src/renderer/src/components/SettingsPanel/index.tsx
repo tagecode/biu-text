@@ -2,6 +2,12 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppLanguage } from '@/hooks/useAppLanguage'
 import { LANGUAGE_NAMES, type AppLanguage } from '@shared/i18n/types'
 import type {
@@ -64,175 +70,194 @@ export function SettingsPanel({
   const { t } = useTranslation()
   const { language, setLanguage } = useAppLanguage()
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-lg border bg-background shadow-xl">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent className="max-w-lg gap-0 overflow-hidden p-0" aria-describedby={undefined}>
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">{t('settings.title')}</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={onClose}
-            aria-label={t('settings.closePanel')}
-            title={t('settings.close')}
-          >
-            <X className="size-4" />
-          </Button>
+          <DialogTitle>{t('settings.title')}</DialogTitle>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DialogClose asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  aria-label={t('settings.closePanel')}
+                >
+                  <X className="size-4" />
+                </Button>
+              </DialogClose>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('settings.close')}</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="grid max-h-[70vh] gap-4 overflow-y-auto px-4 py-4 sm:grid-cols-2">
-          <h3 className="sm:col-span-2 text-xs font-medium text-foreground">{t('settings.generalSection')}</h3>
-          <div className="sm:col-span-2">
-            <SettingField label={t('settings.language')}>
-              <select
-                className="toolbar-select w-full"
-                value={language}
-                onChange={(e) => {
-                  void setLanguage(e.target.value as AppLanguage)
-                }}
-              >
-                <option value="zh-CN">{LANGUAGE_NAMES['zh-CN']}</option>
-                <option value="zh-TW">{LANGUAGE_NAMES['zh-TW']}</option>
-                <option value="en-US">{LANGUAGE_NAMES['en-US']}</option>
-              </select>
-            </SettingField>
-          </div>
+          <h3 className="text-xs font-medium sm:col-span-2">{t('settings.generalSection')}</h3>
 
-          <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={openAtLogin}
-              onChange={(e) => onOpenAtLoginChange(e.target.checked)}
-            />
-            {t('settings.openAtLogin')}
-          </label>
-
-          <div className="sm:col-span-2">
-            <SettingField label={t('settings.autoSave')}>
-              <select
-                className="toolbar-select w-full"
-                value={autoSaveSeconds}
-                onChange={(e) => onAutoSaveSecondsChange(Number(e.target.value) as AutoSaveSeconds)}
-              >
-                {AUTO_SAVE_SECONDS.map((seconds) => (
-                  <option key={seconds} value={seconds}>
-                    {t(autoSaveLabelKey(seconds))}
-                  </option>
+          <SettingField id="setting-language" label={t('settings.language')} className="sm:col-span-2">
+            <Select value={language} onValueChange={(value) => void setLanguage(value as AppLanguage)}>
+              <SelectTrigger id="setting-language" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(['zh-CN', 'zh-TW', 'en-US'] as const).map((code) => (
+                  <SelectItem key={code} value={code}>
+                    {LANGUAGE_NAMES[code]}
+                  </SelectItem>
                 ))}
-              </select>
-            </SettingField>
-          </div>
-
-          <h3 className="sm:col-span-2 text-xs font-medium text-foreground">{t('settings.editorSection')}</h3>
-
-          <SettingField label={t('settings.themeMode')}>
-            <select
-              className="toolbar-select w-full"
-              value={themeMode}
-              onChange={(e) => onThemeModeChange(e.target.value as ThemeMode)}
-            >
-              <option value="light">{t('appearance.light')}</option>
-              <option value="dark">{t('appearance.dark')}</option>
-              <option value="system">{t('appearance.system')}</option>
-            </select>
+              </SelectContent>
+            </Select>
           </SettingField>
 
-          <SettingField label={t('settings.editorFont')}>
-            <select
-              className="toolbar-select w-full"
-              value={editorFontFamily}
-              onChange={(e) => onEditorFontFamilyChange(e.target.value as EditorFontFamily)}
-            >
-              <option value="jetbrains-mono">JetBrains Mono</option>
-              <option value="fira-code">Fira Code</option>
-              <option value="menlo">Menlo</option>
-            </select>
-          </SettingField>
-
-          <SettingField label={t('settings.previewFont')}>
-            <select
-              className="toolbar-select w-full"
-              value={previewFontFamily}
-              onChange={(e) => onPreviewFontFamilyChange(e.target.value as PreviewFontFamily)}
-            >
-              <option value="sans">{t('settings.sans')}</option>
-              <option value="serif">{t('settings.serif')}</option>
-            </select>
-          </SettingField>
-
-          <SettingField label={t('settings.previewTheme')}>
-            <select
-              className="toolbar-select w-full"
-              value={previewTheme}
-              onChange={(e) => onPreviewThemeChange(e.target.value as PreviewTheme)}
-            >
-              <option value="github">GitHub</option>
-              <option value="notion">Notion</option>
-            </select>
-          </SettingField>
-
-          <div className="sm:col-span-2">
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="shrink-0">{t('settings.fontSize')}</span>
-              <input
-                className="toolbar-range flex-1"
-                aria-label={t('settings.adjustFontSize')}
-                type="range"
-                min={12}
-                max={24}
-                step={1}
-                value={fontSize}
-                onChange={(e) => onFontSizeChange(Number(e.target.value))}
-              />
-              <span className="w-10 text-right tabular-nums">{fontSize}px</span>
-            </label>
-          </div>
-
-          <SettingField label={t('settings.tabWidth')}>
-            <select
-              className="toolbar-select w-full"
-              value={tabWidth}
-              onChange={(e) => onTabWidthChange(Number(e.target.value) as TabWidth)}
-            >
-              {TAB_WIDTHS.map((width) => (
-                <option key={width} value={width}>
-                  {width}
-                </option>
-              ))}
-            </select>
-          </SettingField>
-
-          <div className="sm:col-span-2">
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="shrink-0">{t('settings.lineHeight')}</span>
-              <input
-                className="toolbar-range flex-1"
-                aria-label={t('settings.lineHeight')}
-                type="range"
-                min={1.2}
-                max={2}
-                step={0.1}
-                value={lineHeight}
-                onChange={(e) => onLineHeightChange(Number(e.target.value))}
-              />
-              <span className="w-10 text-right tabular-nums">{lineHeight.toFixed(1)}</span>
-            </label>
-          </div>
-
-          <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={showLineNumbers}
-              onChange={(e) => onShowLineNumbersChange(e.target.checked)}
+          <SettingRow>
+            <Label htmlFor="setting-open-at-login" className="text-xs font-normal text-muted-foreground">
+              {t('settings.openAtLogin')}
+            </Label>
+            <Switch
+              id="setting-open-at-login"
+              checked={openAtLogin}
+              onCheckedChange={onOpenAtLoginChange}
             />
-            {t('settings.showLineNumbers')}
-          </label>
+          </SettingRow>
+
+          <SettingField id="setting-auto-save" label={t('settings.autoSave')} className="sm:col-span-2">
+            <Select
+              value={String(autoSaveSeconds)}
+              onValueChange={(value) => onAutoSaveSecondsChange(Number(value) as AutoSaveSeconds)}
+            >
+              <SelectTrigger id="setting-auto-save" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUTO_SAVE_SECONDS.map((seconds) => (
+                  <SelectItem key={seconds} value={String(seconds)}>
+                    {t(autoSaveLabelKey(seconds))}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingField>
+
+          <h3 className="text-xs font-medium sm:col-span-2">{t('settings.editorSection')}</h3>
+
+          <SettingField id="setting-theme-mode" label={t('settings.themeMode')}>
+            <Select value={themeMode} onValueChange={(value) => onThemeModeChange(value as ThemeMode)}>
+              <SelectTrigger id="setting-theme-mode" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">{t('appearance.light')}</SelectItem>
+                <SelectItem value="dark">{t('appearance.dark')}</SelectItem>
+                <SelectItem value="system">{t('appearance.system')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingField>
+
+          <SettingField id="setting-editor-font" label={t('settings.editorFont')}>
+            <Select
+              value={editorFontFamily}
+              onValueChange={(value) => onEditorFontFamilyChange(value as EditorFontFamily)}
+            >
+              <SelectTrigger id="setting-editor-font" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="jetbrains-mono">JetBrains Mono</SelectItem>
+                <SelectItem value="fira-code">Fira Code</SelectItem>
+                <SelectItem value="menlo">Menlo</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingField>
+
+          <SettingField id="setting-preview-font" label={t('settings.previewFont')}>
+            <Select
+              value={previewFontFamily}
+              onValueChange={(value) => onPreviewFontFamilyChange(value as PreviewFontFamily)}
+            >
+              <SelectTrigger id="setting-preview-font" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sans">{t('settings.sans')}</SelectItem>
+                <SelectItem value="serif">{t('settings.serif')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingField>
+
+          <SettingField id="setting-preview-theme" label={t('settings.previewTheme')}>
+            <Select
+              value={previewTheme}
+              onValueChange={(value) => onPreviewThemeChange(value as PreviewTheme)}
+            >
+              <SelectTrigger id="setting-preview-theme" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="github">GitHub</SelectItem>
+                <SelectItem value="notion">Notion</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingField>
+
+          <SettingSlider
+            label={t('settings.fontSize')}
+            ariaLabel={t('settings.adjustFontSize')}
+            value={fontSize}
+            min={12}
+            max={24}
+            step={1}
+            display={`${fontSize}px`}
+            onChange={onFontSizeChange}
+          />
+
+          <SettingSlider
+            label={t('settings.lineHeight')}
+            ariaLabel={t('settings.lineHeight')}
+            value={lineHeight}
+            min={1.2}
+            max={2}
+            step={0.1}
+            display={lineHeight.toFixed(1)}
+            onChange={onLineHeightChange}
+          />
+
+          <SettingField id="setting-tab-width" label={t('settings.tabWidth')}>
+            <Select
+              value={String(tabWidth)}
+              onValueChange={(value) => onTabWidthChange(Number(value) as TabWidth)}
+            >
+              <SelectTrigger id="setting-tab-width" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TAB_WIDTHS.map((width) => (
+                  <SelectItem key={width} value={String(width)}>
+                    {width}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingField>
+
+          <SettingRow>
+            <Label htmlFor="setting-line-numbers" className="text-xs font-normal text-muted-foreground">
+              {t('settings.showLineNumbers')}
+            </Label>
+            <Switch
+              id="setting-line-numbers"
+              checked={showLineNumbers}
+              onCheckedChange={onShowLineNumbersChange}
+            />
+          </SettingRow>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -243,11 +268,63 @@ function autoSaveLabelKey(seconds: AutoSaveSeconds): string {
   return 'settings.autoSaveOff'
 }
 
-function SettingField({ label, children }: { label: string; children: ReactNode }) {
+function SettingField({
+  id,
+  label,
+  className,
+  children
+}: {
+  id: string
+  label: string
+  className?: string
+  children: ReactNode
+}) {
   return (
-    <label className="grid gap-1.5 text-xs text-muted-foreground">
-      <span>{label}</span>
+    <div className={`grid gap-1.5 ${className ?? ''}`}>
+      <Label htmlFor={id} className="text-xs font-normal text-muted-foreground">
+        {label}
+      </Label>
       {children}
-    </label>
+    </div>
+  )
+}
+
+function SettingRow({ children }: { children: ReactNode }) {
+  return <div className="flex items-center justify-between gap-2 sm:col-span-2">{children}</div>
+}
+
+function SettingSlider({
+  label,
+  ariaLabel,
+  value,
+  min,
+  max,
+  step,
+  display,
+  onChange
+}: {
+  label: string
+  ariaLabel: string
+  value: number
+  min: number
+  max: number
+  step: number
+  display: string
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="flex items-center gap-3 sm:col-span-2">
+      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
+      <Slider
+        className="flex-1"
+        thumbLabel={ariaLabel}
+        min={min}
+        max={max}
+        step={step}
+        value={[value]}
+        onValueChange={([next]) => onChange(next)}
+      />
+      <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{display}</span>
+    </div>
   )
 }

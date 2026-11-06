@@ -118,7 +118,7 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 | 前端框架 | React | `^19.2.0` | 函数组件 + StrictMode |
 | 类型系统 | TypeScript | `~5.9.3` | 双 tsconfig，`strict: true` |
 | 样式 | Tailwind CSS | `^4.1.6` | `@tailwindcss/vite`，无 `tailwind.config` |
-| 组件库 | shadcn/ui（Radix UI） | Radix 多个 `^1.x/^2.x` | `components/ui` 现有 6 个组件 |
+| 组件库 | shadcn/ui（Radix UI） | Radix 多个 `^1.x/^2.x` | `components/ui` 现有 11 个组件；渲染层不再使用原生 `select` / `checkbox` / `range` / `title` 提示 |
 | 图标 | lucide-react | `^0.511.0` | 工具栏、状态栏 |
 | 编辑器 | CodeMirror 6（`@uiw/react-codemirror`） | `^4.25.8` | Markdown 语言包 + one-dark |
 | Markdown | markdown-it | `^14.1.1` | 扩展插件见 §8.2 |

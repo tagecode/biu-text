@@ -9,6 +9,7 @@ import { Toolbar } from '@/components/Toolbar'
 import { Splitter } from '@/components/Splitter'
 import { StatusBar } from '@/components/StatusBar'
 import { SettingsPanel } from '@/components/SettingsPanel'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useFile } from '@/hooks/useFile'
 import { useTheme } from '@/hooks/useTheme'
 import { useAppearanceSettings } from '@/hooks/useAppearanceSettings'
@@ -219,100 +220,102 @@ function App() {
 
   // ── Render ──────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
-      <Toolbar
-        themeMode={themeMode}
-        wordCount={wordCount}
-        onNewFile={newFile}
-        onOpenFile={openFile}
-        onSaveFile={saveFile}
-        onExportHtml={handleExportHtml}
-        onExportPdf={handleExportPdf}
-        previewVisible={previewVisible}
-        onTogglePreviewVisible={handleTogglePreviewVisible}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onBold={handleBold}
-        onItalic={handleItalic}
-        onCode={handleCode}
-        onLink={handleLink}
-      />
+    <TooltipProvider>
+      <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
+        <Toolbar
+          themeMode={themeMode}
+          wordCount={wordCount}
+          onNewFile={newFile}
+          onOpenFile={openFile}
+          onSaveFile={saveFile}
+          onExportHtml={handleExportHtml}
+          onExportPdf={handleExportPdf}
+          previewVisible={previewVisible}
+          onTogglePreviewVisible={handleTogglePreviewVisible}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onBold={handleBold}
+          onItalic={handleItalic}
+          onCode={handleCode}
+          onLink={handleLink}
+        />
 
-      <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden">
-        {/* 左侧编辑区 */}
-        <div style={{ width: previewVisible ? `${leftPercent}%` : '100%' }} className="min-w-0 overflow-hidden">
-          <Editor
-            content={content}
-            theme={theme}
-            fontFamily={editorFontFamily}
-            fontSize={fontSize}
-            tabWidth={tabWidth}
-            lineHeight={lineHeight}
-            showLineNumbers={showLineNumbers}
-            editorViewRef={editorViewRef}
-            previewScrollRef={previewScrollRef}
-            onChange={setContent}
-            onCursorChange={handleCursorChange}
-          />
+        <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden">
+          {/* 左侧编辑区 */}
+          <div style={{ width: previewVisible ? `${leftPercent}%` : '100%' }} className="min-w-0 overflow-hidden">
+            <Editor
+              content={content}
+              theme={theme}
+              fontFamily={editorFontFamily}
+              fontSize={fontSize}
+              tabWidth={tabWidth}
+              lineHeight={lineHeight}
+              showLineNumbers={showLineNumbers}
+              editorViewRef={editorViewRef}
+              previewScrollRef={previewScrollRef}
+              onChange={setContent}
+              onCursorChange={handleCursorChange}
+            />
+          </div>
+
+          {previewVisible && (
+            <>
+              <Splitter onDrag={handleSplitterDrag} onReset={handleSplitterReset} />
+
+              {/* 右侧预览区 */}
+              <div style={{ width: `${100 - leftPercent}%` }} className="min-w-0 overflow-hidden">
+                <Preview
+                  ref={previewScrollRef}
+                  content={content}
+                  documentPath={filePath}
+                  theme={theme}
+                  previewTheme={previewTheme}
+                  previewFontFamily={previewFontFamily}
+                  fontSize={fontSize}
+                />
+              </div>
+            </>
+          )}
         </div>
 
-        {previewVisible && (
-          <>
-            <Splitter onDrag={handleSplitterDrag} onReset={handleSplitterReset} />
+        <StatusBar
+          line={cursorLine}
+          col={cursorCol}
+          wordCount={wordCount}
+          theme={theme}
+          themeMode={themeMode}
+          previewTheme={previewTheme}
+          fontSize={fontSize}
+          onCycleThemeMode={cycleThemeMode}
+        />
 
-            {/* 右侧预览区 */}
-            <div style={{ width: `${100 - leftPercent}%` }} className="min-w-0 overflow-hidden">
-              <Preview
-                ref={previewScrollRef}
-                content={content}
-                documentPath={filePath}
-                theme={theme}
-                previewTheme={previewTheme}
-                previewFontFamily={previewFontFamily}
-                fontSize={fontSize}
-              />
-            </div>
-          </>
-        )}
+        <SettingsPanel
+          open={settingsOpen}
+          themeMode={themeMode}
+          editorFontFamily={editorFontFamily}
+          previewFontFamily={previewFontFamily}
+          fontSize={fontSize}
+          previewTheme={previewTheme}
+          tabWidth={tabWidth}
+          lineHeight={lineHeight}
+          showLineNumbers={showLineNumbers}
+          autoSaveSeconds={autoSaveSeconds}
+          openAtLogin={openAtLogin}
+          onClose={() => setSettingsOpen(false)}
+          onThemeModeChange={setThemeMode}
+          onEditorFontFamilyChange={setEditorFontFamily}
+          onPreviewFontFamilyChange={setPreviewFontFamily}
+          onFontSizeChange={setFontSize}
+          onPreviewThemeChange={setPreviewTheme}
+          onTabWidthChange={setTabWidth}
+          onLineHeightChange={setLineHeight}
+          onShowLineNumbersChange={setShowLineNumbers}
+          onAutoSaveSecondsChange={setAutoSaveSeconds}
+          onOpenAtLoginChange={(value) => {
+            void setOpenAtLogin(value)
+          }}
+        />
       </div>
-
-      <StatusBar
-        line={cursorLine}
-        col={cursorCol}
-        wordCount={wordCount}
-        theme={theme}
-        themeMode={themeMode}
-        previewTheme={previewTheme}
-        fontSize={fontSize}
-        onCycleThemeMode={cycleThemeMode}
-      />
-
-      <SettingsPanel
-        open={settingsOpen}
-        themeMode={themeMode}
-        editorFontFamily={editorFontFamily}
-        previewFontFamily={previewFontFamily}
-        fontSize={fontSize}
-        previewTheme={previewTheme}
-        tabWidth={tabWidth}
-        lineHeight={lineHeight}
-        showLineNumbers={showLineNumbers}
-        autoSaveSeconds={autoSaveSeconds}
-        openAtLogin={openAtLogin}
-        onClose={() => setSettingsOpen(false)}
-        onThemeModeChange={setThemeMode}
-        onEditorFontFamilyChange={setEditorFontFamily}
-        onPreviewFontFamilyChange={setPreviewFontFamily}
-        onFontSizeChange={setFontSize}
-        onPreviewThemeChange={setPreviewTheme}
-        onTabWidthChange={setTabWidth}
-        onLineHeightChange={setLineHeight}
-        onShowLineNumbersChange={setShowLineNumbers}
-        onAutoSaveSecondsChange={setAutoSaveSeconds}
-        onOpenAtLoginChange={(value) => {
-          void setOpenAtLogin(value)
-        }}
-      />
-    </div>
+    </TooltipProvider>
   )
 }
 

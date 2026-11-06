@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { PreviewTheme } from '@/hooks/useAppearanceSettings'
 import type { Theme, ThemeMode } from '@/hooks/useTheme'
 import type { WordCountResult } from '@/hooks/useWordCount'
@@ -61,22 +63,28 @@ export function StatusBar({
         <Divider />
         <StatusItem label={previewTheme === 'github' ? 'GitHub' : 'Notion'} />
         <Divider />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-[18px] rounded-sm text-muted-foreground hover:text-foreground"
-          onClick={onCycleThemeMode}
-          aria-label={t('status.cycleTheme')}
-          title={t('status.currentTheme', { theme: themeModeLabel })}
-        >
-          {themeMode === 'system' ? (
-            <Monitor className="size-3" />
-          ) : theme === 'dark' ? (
-            <Sun className="size-3" />
-          ) : (
-            <Moon className="size-3" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-[18px] rounded-sm text-muted-foreground hover:text-foreground"
+              onClick={onCycleThemeMode}
+              aria-label={t('status.cycleTheme')}
+            >
+              {themeMode === 'system' ? (
+                <Monitor className="size-3" />
+              ) : theme === 'dark' ? (
+                <Sun className="size-3" />
+              ) : (
+                <Moon className="size-3" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {t('status.currentTheme', { theme: themeModeLabel })}
+          </TooltipContent>
+        </Tooltip>
         <StatusItem label={themeModeLabel} />
       </div>
     </div>
@@ -92,5 +100,5 @@ function StatusItem({ label }: { label: string }) {
 }
 
 function Divider() {
-  return <span className="text-border/60 select-none">│</span>
+  return <Separator orientation="vertical" className="mx-1 h-2.5" />
 }
