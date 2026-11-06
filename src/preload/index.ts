@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppLanguage } from '../shared/i18n/types'
 import type { ImageFileInput } from '../shared/image-input'
+import type { NotificationPayload } from '../shared/notification'
 
 type UnsubFn = () => void
 
@@ -131,6 +132,12 @@ const windowAPI = {
     const handler = () => cb()
     ipcRenderer.on(IPC.APP_WILL_CLOSE, handler)
     return () => ipcRenderer.removeListener(IPC.APP_WILL_CLOSE, handler)
+  },
+
+  onNotify: (cb: (payload: NotificationPayload) => void): UnsubFn => {
+    const handler = (_: Electron.IpcRendererEvent, payload: NotificationPayload) => cb(payload)
+    ipcRenderer.on(IPC.APP_NOTIFY, handler)
+    return () => ipcRenderer.removeListener(IPC.APP_NOTIFY, handler)
   },
 
   confirmClose: (): void => {

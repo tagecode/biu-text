@@ -126,6 +126,10 @@ const zhCN = {
   diagram: {
     renderFailed: '图表渲染失败'
   },
+  notify: {
+    exported: '已导出 {{name}}',
+    close: '关闭通知'
+  },
   image: {
     insert: '插入图片',
     saveFailed: '图片保存失败',
@@ -303,6 +307,10 @@ const enUS = {
   diagram: {
     renderFailed: 'Diagram failed to render'
   },
+  notify: {
+    exported: 'Exported {{name}}',
+    close: 'Dismiss notification'
+  },
   image: {
     insert: 'Insert Image',
     saveFailed: "Couldn't Save Image",
@@ -479,6 +487,10 @@ const zhTW = {
   },
   diagram: {
     renderFailed: '圖表渲染失敗'
+  },
+  notify: {
+    exported: '已匯出 {{name}}',
+    close: '關閉通知'
   },
   image: {
     insert: '插入圖片',

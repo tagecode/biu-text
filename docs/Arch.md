@@ -128,7 +128,7 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 | 消毒 | DOMPurify | `^3.3.2` | 预览与导出共用的信任边界 |
 | 预览样式 | github-markdown-css | `^5.9.0` | 预置 GitHub 主题，Notion 为主题覆盖 |
 | 国际化 | i18next + react-i18next | `^26.7.1` / `^17.1.12` | 渲染进程；主进程另用纯函数（§11） |
-| 测试 | Vitest | `^5.1.0` | 仅覆盖共享层纯逻辑 |
+| 测试 | Vitest | `^5.1.0` | 只覆盖纯逻辑：`shared/`、`main/` 纯函数、`renderer/src/lib/` 纯模块 |
 | 打包 | electron-builder | `^26.8.1` | dmg / nsis / AppImage / deb |
 
 ### 3.2 规划依赖（尚未引入）
@@ -156,6 +156,7 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 4. **系统集成**：`nativeTheme`（主题）、`app.getLoginItemSettings/setLoginItemSettings`（开机自启）、`shell.openExternal`（外部链接）。
 5. **持久化**：语言偏好与最近文件列表写入 `app.getPath('userData')`。
 6. **进程内状态**：`mainWindow`、`isReadyToClose`、`recentFiles`、`currentLanguage`。
+7. **轻量通知**：`notify(level, title, description)` 经 `APP_NOTIFY` 推给渲染进程的 Toast（§6.6）；打开/保存失败与未保存确认仍用系统对话框。
 
 #### 启动序列
 
@@ -181,7 +182,7 @@ app.on('window-all-closed') // 非 macOS 退出
 | `fileAPI` | `openDialog` / `openPath` / `save` / `saveAs` / `exportHtml` / `exportPdf` | `invoke` |
 | `fileAPI` | `onMenuNew/Open/OpenRecent/Save/SaveAs/ExportHtml/ExportPdf/Find/Replace` | 主→渲染 `on`，返回退订函数 |
 | `themeAPI` | `get` / `set` / `onChange` | `invoke` / `send` / 主→渲染 |
-| `windowAPI` | `platform` / `confirmDiscardChanges` / `setTitle` / `onWillClose` / `confirmClose` / `cancelClose` | 属性 / `invoke` / `send` / 主→渲染 |
+| `windowAPI` | `platform` / `confirmDiscardChanges` / `setTitle` / `onWillClose` / `onNotify` / `confirmClose` / `cancelClose` | 属性 / `invoke` / `send` / 主→渲染 |
 | `languageAPI` | `getSync` / `set` | `sendSync` / `invoke` |
 | `loginAPI` | `get` / `set` | `invoke` |
 | `imageAPI` | `setDocumentPath` / `saveImages` / `pickImages` | `send` / `invoke` / `invoke` |
@@ -205,6 +206,7 @@ app.on('window-all-closed') // 非 macOS 退出
 | 关闭握手 | `APP_WILL_CLOSE`、`APP_CLOSE_CONFIRMED`、`APP_CLOSE_CANCELLED` | 双向 | `send`/`on` |
 | 未保存确认 | `APP_CONFIRM_DISCARD` | 渲染 → 主 | `invoke/handle` |
 | 窗口 | `WINDOW_SET_TITLE` | 渲染 → 主 | `send` |
+| 轻量通知 | `APP_NOTIFY` | 主 → 渲染 | `webContents.send` |
 | 图片目录 | `DOCUMENT_SET_PATH` | 渲染 → 主 | `send` |
 | 图片写入 | `IMAGE_SAVE`、`IMAGE_PICK` | 渲染 → 主 | `invoke/handle` |
 | 主题 | `THEME_GET`、`THEME_SET`、`THEME_CHANGED` | 双向 | `invoke` / `send` / `send` |
@@ -276,7 +278,7 @@ biu-text/
 ├── build/                         # 打包中间产物
 ├── out/                           # electron-vite 构建输出
 ├── src/
-│   ├── main/index.ts              # 主进程全部实现（约 415 行）
+│   ├── main/index.ts              # 主进程全部实现（约 490 行）
 │   ├── main/image-path.ts         # 预览图片的路径解析与目录白名单
 │   ├── main/image-save.ts         # 图片落盘：MIME/扩展名白名单、文件名清洗、重名递增
 │   ├── main/export-image.ts       # 导出前把相对图片内联成 data URI
@@ -287,6 +289,7 @@ biu-text/
 │   │   ├── ipc-channels.ts        # IPC 常量
 │   │   ├── image-url.ts           # 相对路径 → biu-image:// 改写 + DOMPurify URI 白名单
 │   │   ├── image-input.ts         # 渲染 → 主传递图片字节的类型契约
+│   │   ├── notification.ts        # 主 → 渲染的轻量通知载荷类型（level/title/description）
 │   │   ├── diagram.ts             # 图表块结构 + 缓存键
 │   │   ├── editor-preferences.ts  # Tab/行高/行号/自动保存的归一化
 │   │   ├── recent-files.ts        # 最近文件解析、去重、时间格式化
@@ -313,6 +316,7 @@ biu-text/
 │           │   ├── Splitter/      # Pointer Events 拖拽分隔条
 │           │   ├── StatusBar/     # 光标、字数、编码、语言、字号、主题
 │           │   ├── SettingsPanel/ # 设置弹层
+│           │   ├── Toaster.tsx    # 右上角 Toast 列表（读 toast-store）
 │           │   └── ui/            # shadcn 基础组件
 │           ├── hooks/
 │           │   ├── useFile.ts           # 文档状态与文件操作
@@ -321,6 +325,8 @@ biu-text/
 │           │   ├── useAppLanguage.ts    # i18next 语言切换
 │           │   ├── useLoginItem.ts      # 开机自启
 │           │   ├── useWordCount.ts      # 中英分计
+│           │   ├── useToast.ts          # useSyncExternalStore 订阅 toast-store
+│           │   ├── useNotifications.ts  # 订阅 windowAPI.onNotify 并入队 Toast
 │           │   └── useDebounce.ts       # 通用防抖
 │           ├── lib/
 │           │   ├── markdown.ts          # markdown-it 单例与插件（含 mermaid 占位 fence 规则）
@@ -329,6 +335,7 @@ biu-text/
 │           │   ├── image-insert.ts      # 在光标处插入 ![](assets/…)
 │           │   ├── block-insert.ts      # 块级内容的插入位置计算（图片、Mermaid 围栏共用）
 │           │   ├── search-panel.ts      # 打开替换面板并聚焦
+│           │   ├── toast-store.ts       # 模块级 Toast 队列：3 秒、最多 3 条
 │           │   └── utils.ts             # cn() 等
 │           └── types/vendor.d.ts
 └── tsconfig.json / tsconfig.node.json / tsconfig.web.json
@@ -370,6 +377,7 @@ App
 | 预览显隐 | `App` | `localStorage: biu-text:preview-visible` | 默认显示 |
 | 光标行列 | `App` | 否 | 由 CodeMirror `onUpdate` 推送 |
 | 字数统计 | `useWordCount` | 否 | `useMemo` 派生 |
+| Toast 队列 | `lib/toast-store.ts`（模块级） | 否 | 主进程经 `APP_NOTIFY` 推送，3 秒自动消失 |
 
 > 没有全局 store。跨组件共享的状态上提到 `App`，其余封装在各自的 hook 内；主进程权威状态（语言、主题源、最近文件）通过 IPC 同步。
 
@@ -394,6 +402,8 @@ CodeMirror onChange
 | `useAppLanguage` | `language` / `setLanguage`，同步主进程 | i18next、`window.languageAPI` |
 | `useLoginItem` | 读取/设置登录项，失败回退 | `window.loginAPI` |
 | `useWordCount` | 中文字符逐字计数 + 英文按词计数 + 行数 | 无 |
+| `useToast` | 用 `useSyncExternalStore` 订阅 Toast 队列 | `lib/toast-store.ts` |
+| `useNotifications` | 订阅 `windowAPI.onNotify`，把主进程通知入队 | `window.windowAPI` |
 | `useDebounce` | 通用值防抖 | 无 |
 
 ### 6.5 样式与主题
@@ -403,6 +413,33 @@ CodeMirror onChange
 - 深色模式通过 `document.documentElement.classList.add('dark')` 切换（`useTheme.applyTheme`），与 shadcn 约定一致。
 - 预览区独立主题层：`.preview-surface-light/dark` 控制底色与代码块配色；`.preview-theme-github/notion` 控制排版；`.preview-font-sans/serif` 控制字体。三者以类名组合叠加在 Preview 容器上。
 - 编辑器字体/字号/行高通过 CSS 自定义属性（`--editor-font-family`、`--editor-font-size`、`--editor-line-height`）注入，由 `index.css` 的 `.cm-editor` 规则消费。
+
+### 6.6 轻量通知（Toast）
+
+**分工**：反馈强度按「是否需要用户决策」分两层。
+
+| 场景 | 形态 | 原因 |
+|------|------|------|
+| 打开失败、保存失败、未保存确认 | `dialog.showErrorBox` / `dialog.showMessageBox` | 可能丢数据，需要用户看清并决策 |
+| 图片保存失败、导出 HTML/PDF 成功或失败 | 右上角 Toast | 结果性反馈，无需打断 |
+
+**链路**：
+
+```text
+主进程 notify(level, title, description?)
+  └─ mainWindow.webContents.send(IPC.APP_NOTIFY, payload)
+       └─ preload windowAPI.onNotify(cb) → ipcRenderer.on('app:notify')
+            └─ useNotifications（App 根部注册一次）→ toast-store.toast(payload)
+                 └─ useState 之外的模块级队列 + useSyncExternalStore → <Toaster /> 重渲染
+```
+
+**实现要点**
+
+- `src/shared/notification.ts` 定义 `NotificationLevel = 'info' | 'success' | 'error'` 与载荷类型，主进程与渲染进程共用。
+- `src/renderer/src/lib/toast-store.ts` 是模块级队列（不引入全局状态库）：`toast()` 追加并 `slice(-3)` 丢最旧，`dismissToast()` 关闭，`getToasts()` 快照引用稳定以满足 `useSyncExternalStore` 的相等性要求；`TOAST_DURATION = 3000` 对应 PRD 5.1。
+- `components/ui/toast.tsx` 包一层 Radix Toast（Arch R14 登记的已安装依赖），`toastVariants` 用 `cva` 区分 info / success / error 三档边框；`components/Toaster.tsx` 负责图标、标题、描述与关闭按钮，并按 level 取 lucide 图标。
+- 文案统一走 i18n（`notify.exported`、`notify.close`，以及复用既有的 `image.saveFailed`、`dialog.exportHtmlFailed`、`dialog.exportPdfFailed`），主进程负责拼出最终文案。
+- `Toaster` 挂在 `App` 的 `TooltipProvider` 内、布局容器末尾；viewport 定位 `fixed top-12 right-3 z-[60]`，避开工具栏。
 
 ---
 
@@ -676,7 +713,7 @@ Editor 的 paste 捕获 / drop / 工具栏「插入图片」
 - 内联一份精简 CSS（含明暗配色、GitHub/Notion 宽度差异、字体栈、表格滚动、`@page` 边距）。
 - 标题取自当前文件名（无文件时用本地化的"BiuText 文档"）。
 
-主进程接收 HTML 字符串，先经 `inlineLocalImages()` 把 `<img src="assets/…">` 换成对应的 `data:` URI（见 §10.4），再弹保存对话框（默认名 `<原名>.html`）写入文件——导出的 HTML 不依赖 `assets/` 目录。
+主进程接收 HTML 字符串，先经 `inlineLocalImages()` 把 `<img src="assets/…">` 换成对应的 `data:` URI（见 §10.4），再弹保存对话框（默认名 `<原名>.html`）写入文件——导出的 HTML 不依赖 `assets/` 目录。写完（或失败）时经 `APP_NOTIFY` 推送一条 Toast（§6.6）。
 
 ### 10.2 PDF 导出
 
@@ -686,7 +723,7 @@ Editor 的 paste 捕获 / drop / 工具栏「插入图片」
        └─ 新建隐藏 BrowserWindow({ show:false, sandbox:true, contextIsolation:true, nodeIntegration:false })
        └─ loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
        └─ webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
-       └─ writeFile(pdf) → finally: pdfWindow.destroy()
+       └─ writeFile(pdf) → notify('success', …) → finally: pdfWindow.destroy()
 ```
 
 > 打印窗口不加载 preload，也不具备任何 IPC 能力，仅用于排版与打印，是当前隔离度最高的窗口。
@@ -917,10 +954,10 @@ renderer: root: src/renderer, input: index.html,
 |------|------|------|
 | ESLint（flat config） | `npm run lint` | `**/*.{ts,tsx}`，js/ts recommended + react-hooks + react-refresh |
 | TypeScript | `npm run typecheck` | 主/渲染两套 |
-| Vitest | `npm test` | `src/shared/**`：i18n、editor-preferences、recent-files、search-phrases |
+| Vitest | `npm test` | 纯函数与纯模块：i18n、editor-preferences、recent-files、search-phrases、diagram、image-url、image-path、image-save、export-image、toast-store |
 | i18n 校验 | `npm run check:i18n` | 三语 key 对齐 |
 
-**测试策略**：只测纯逻辑（共享层），不测 UI 与 Electron 集成；无 E2E。这与"逻辑下沉到 shared"的架构原则互为因果——把可测逻辑挤出组件，降低测试成本。
+**测试策略**：只测纯逻辑（`shared/`、主进程的纯函数、渲染层的纯模块），不测 UI 与 Electron 集成；无 E2E。这与"逻辑下沉到 shared"的架构原则互为因果——把可测逻辑挤出组件，降低测试成本。`vitest.config.ts` 因此配置了 `@` / `@shared` / `@renderer` 别名，让渲染层纯模块也能直接引入。
 
 ### 15.4 持续集成与发布
 
@@ -1111,7 +1148,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R11 | 无结构化日志/崩溃上报 | 线上问题难定位 | 主进程统一日志（分级 + 落盘），渲染进程 `window.onerror` 上报主进程 |
 | R12 | ~~新建/打开不提示保存脏内容~~ **已修复** | 可能丢失未保存修改 | `useFile` 抽出 `confirmLeaveCurrentDocument()`，新建/打开/打开最近文件/关闭四条路径共用；选"保存"时执行真实写盘，写盘失败或另存为被取消则中止操作 |
 | R13 | 预览外链点击处理为兜底空操作，依赖主进程拦截 | 行为耦合、可读性差 | 明确由 `setWindowOpenHandler` 负责，移除或注释化渲染层监听 |
-| R14 | 5 个 Radix 包（dialog、dropdown-menu、scroll-area、toast、tooltip）已装未用 | 增大依赖体积与安装时间 | 按需移除，或在引入通知/对话框/Collapsible 时复用 |
+| R14 | 5 个 Radix 包（dialog、dropdown-menu、scroll-area、toast、tooltip）已装未用 | 增大依赖体积与安装时间 | toast 已在 v0.4 用于轻量通知（§6.6），tooltip 用于工具栏提示；剩余包按需移除，或在引入对应能力时复用 |
 | R15 | 图片资产无生命周期管理 | 移动/重命名文档后 `assets/` 里的图片与 Markdown 断链；删除图片行不会回收文件；导出把图片内联成 `data:` 会让大图文档的 HTML/PDF 明显变大 | v0.5 做云图床时顺带引入"文档 → 资产"归属与孤儿清理；导出侧可加"内联/外链"开关 |
 
 ---

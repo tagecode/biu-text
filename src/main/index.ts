@@ -78,7 +78,7 @@ async function saveImageAssets(documentPath: unknown, files: unknown): Promise<s
       saved.push(`assets/${name}`)
     }
   } catch (err) {
-    dialog.showErrorBox(t('image.saveFailed'), String(err))
+    notify('error', t('image.saveFailed'), String(err))
   }
   return saved
 }
@@ -89,6 +89,11 @@ function languageStorePath(): string {
 
 function t(key: string, vars?: Record<string, string | number>): string {
   return translate(currentLanguage, key, vars)
+}
+
+/** 轻量反馈走渲染进程的右上角 Toast；需要用户决策的仍走系统对话框 */
+function notify(level: 'info' | 'success' | 'error', title: string, description?: string): void {
+  mainWindow?.webContents.send(IPC.APP_NOTIFY, { level, title, description })
 }
 
 function recentFilesStorePath(): string {
@@ -317,9 +322,10 @@ ipcMain.handle(
     try {
       const selfContained = await inlineLocalImages(html, documentDirectory(documentPath) ?? imageBaseDir)
       await writeFile(filePath, selfContained, 'utf-8')
+      notify('success', t('notify.exported', { name: basename(filePath) }))
       return { path: filePath }
     } catch (err) {
-      dialog.showErrorBox(t('dialog.exportHtmlFailed'), String(err))
+      notify('error', t('dialog.exportHtmlFailed'), String(err))
       return null
     }
   }
@@ -359,9 +365,10 @@ ipcMain.handle(
         preferCSSPageSize: true
       })
       await writeFile(filePath, pdfData)
+      notify('success', t('notify.exported', { name: basename(filePath) }))
       return { path: filePath }
     } catch (err) {
-      dialog.showErrorBox(t('dialog.exportPdfFailed'), String(err))
+      notify('error', t('dialog.exportPdfFailed'), String(err))
       return null
     } finally {
       pdfWindow?.destroy()

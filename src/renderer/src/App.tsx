@@ -10,11 +10,13 @@ import { Splitter } from '@/components/Splitter'
 import { StatusBar } from '@/components/StatusBar'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/Toaster'
 import { useFile } from '@/hooks/useFile'
 import { useTheme } from '@/hooks/useTheme'
 import { useAppearanceSettings } from '@/hooks/useAppearanceSettings'
 import { useLoginItem } from '@/hooks/useLoginItem'
 import { useWordCount } from '@/hooks/useWordCount'
+import { useNotifications } from '@/hooks/useNotifications'
 import { buildExportHtmlDocument } from '@/lib/export-document'
 import { insertImageLinks } from '@/lib/image-insert'
 import { insertBlock } from '@/lib/block-insert'
@@ -82,6 +84,7 @@ function readStoredPreviewVisible(): boolean {
 // ─── App ─────────────────────────────────────────────────────────
 function App() {
   const { t } = useTranslation()
+  useNotifications()
   const { content, filePath, setContent, newFile, openFile, saveFile, saveDocument, autoSave, exportHtml, exportPdf } =
     useFile()
   const { theme, themeMode, setThemeMode, cycleThemeMode } = useTheme()
@@ -343,6 +346,7 @@ function App() {
             void setOpenAtLogin(value)
           }}
         />
+        <Toaster />
       </div>
     </TooltipProvider>
   )

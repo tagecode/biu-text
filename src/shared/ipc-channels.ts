@@ -30,6 +30,9 @@ export const IPC = {
   // 窗口标题
   WINDOW_SET_TITLE: 'window:set-title',
 
+  // 主进程 → 渲染进程的轻量通知（右上角 Toast）
+  APP_NOTIFY: 'app:notify',
+
   // 当前文档路径（主进程据此限制预览图片的读取范围）
   DOCUMENT_SET_PATH: 'document:set-path',
 

@@ -1,5 +1,6 @@
 import type { AppLanguage } from '../shared/i18n/types'
 import type { ImageFileInput } from '../shared/image-input'
+import type { NotificationPayload } from '../shared/notification'
 
 export {}
 
@@ -34,6 +35,7 @@ interface WindowAPI {
   confirmDiscardChanges: (documentName: string) => Promise<'save' | 'discard' | 'cancel'>
   setTitle: (title: string) => void
   onWillClose: (cb: () => void) => UnsubFn
+  onNotify: (cb: (payload: NotificationPayload) => void) => UnsubFn
   confirmClose: () => void
   cancelClose: () => void
 }
