@@ -10,8 +10,13 @@ permissions:
   contents: write
 
 jobs:
+  quality:
+    name: Quality Gates
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: Build (${{ matrix.platform }})
+    needs: quality
     strategy:
       fail-fast: false
       matrix:

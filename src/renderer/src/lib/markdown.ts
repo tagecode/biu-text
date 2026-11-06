@@ -4,6 +4,7 @@ import markdownItFootnote from 'markdown-it-footnote'
 import { full as markdownItEmoji } from 'markdown-it-emoji'
 import taskLists from 'markdown-it-task-lists'
 import markdownItKatex from '@traptitech/markdown-it-katex'
+import type { DiagramBlock } from '@shared/diagram'
 
 function escapeHtml(value: string): string {
   return value
@@ -47,19 +48,13 @@ md.use(markdownItKatex, {
 md.use(taskLists, { enabled: true, label: true, labelAfter: false })
 
 // 使外部链接在新窗口打开（配合 Electron shell.openExternal）
-const defaultLinkOpen =
-  md.renderer.rules.link_open ||
-  function (tokens: any[], idx: number, options: any, _env: unknown, self: any): string {
-    return self.renderToken(tokens, idx, options)
-  }
+type LinkOpenRule = NonNullable<typeof md.renderer.rules.link_open>
 
-md.renderer.rules.link_open = function (
-  tokens: any[],
-  idx: number,
-  options: any,
-  env: unknown,
-  self: any
-): string {
+const defaultLinkOpen: LinkOpenRule =
+  md.renderer.rules.link_open ||
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const hrefIndex = token.attrIndex('href')
   if (hrefIndex >= 0) {
@@ -72,6 +67,47 @@ md.renderer.rules.link_open = function (
   return defaultLinkOpen(tokens, idx, options, env, self)
 }
 
-export function renderMarkdown(content: string): string {
-  return md.render(content)
+type ImageRule = NonNullable<typeof md.renderer.rules.image>
+
+const defaultImageRule: ImageRule =
+  md.renderer.rules.image || ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const resolveImageSrc = env?.resolveImageSrc as MarkdownRenderEnv['resolveImageSrc']
+  const srcIndex = token.attrIndex('src')
+  if (resolveImageSrc && srcIndex >= 0) {
+    token.attrSet('src', resolveImageSrc(token.attrs![srcIndex][1]))
+  }
+  return defaultImageRule(tokens, idx, options, env, self)
+}
+
+type FenceRule = NonNullable<typeof md.renderer.rules.fence>
+
+type DiagramCollector = NonNullable<MarkdownRenderEnv['diagrams']>
+
+// 图表不能同步渲染，这里只产出占位元素，真正的 SVG 由 Preview 在提交后水合
+const defaultFence: FenceRule = md.renderer.rules.fence!
+
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const diagrams = env?.diagrams as DiagramCollector | undefined
+  const lang = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
+  if (diagrams && lang === 'mermaid') {
+    const id = `d${diagrams.length}`
+    diagrams.push({ id, lang, code: token.content })
+    return `<div class="biu-diagram" data-diagram-id="${id}" data-diagram-lang="${lang}" data-diagram-state="pending"></div>\n`
+  }
+  return defaultFence(tokens, idx, options, env, self)
+}
+
+export interface MarkdownRenderEnv {
+  /** 预览区用它把相对路径转成自定义协议地址；导出时不传，保持原始引用 */
+  resolveImageSrc?: (src: string) => string
+  /** 传入即启用图表占位收集，收集到的块由调用方负责水合 */
+  diagrams?: DiagramBlock[]
+}
+
+export function renderMarkdown(content: string, env: MarkdownRenderEnv = {}): string {
+  return md.render(content, env)
 }

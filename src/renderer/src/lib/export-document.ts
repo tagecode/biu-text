@@ -1,5 +1,7 @@
 import DOMPurify from 'dompurify'
 import { renderMarkdown } from '@/lib/markdown'
+import { hydrateDiagrams } from '@/lib/diagram-hydrate'
+import type { DiagramBlock } from '@shared/diagram'
 import type { PreviewFontFamily, PreviewTheme } from '@/hooks/useAppearanceSettings'
 import type { Theme } from '@/hooks/useTheme'
 
@@ -21,7 +23,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;')
 }
 
-export function buildExportHtmlDocument(options: ExportDocumentOptions): string {
+export async function buildExportHtmlDocument(options: ExportDocumentOptions): Promise<string> {
   const {
     title,
     content,
@@ -31,10 +33,22 @@ export function buildExportHtmlDocument(options: ExportDocumentOptions): string 
     fontSize
   } = options
 
-  const html = DOMPurify.sanitize(renderMarkdown(content), {
+  const diagrams: DiagramBlock[] = []
+  let html = DOMPurify.sanitize(renderMarkdown(content, { diagrams }), {
     ADD_ATTR: ['target', 'rel'],
     ADD_TAGS: ['iframe']
   })
+
+  // 导出件里不能留占位块：先把图表渲染成内联 SVG
+  if (diagrams.length > 0) {
+    const container = document.createElement('div')
+    container.innerHTML = html
+    await hydrateDiagrams(container, diagrams, {
+      theme,
+      signal: new AbortController().signal
+    })
+    html = container.innerHTML
+  }
 
   const isDark = theme === 'dark'
   const bg = isDark ? '#0f172a' : '#ffffff'
@@ -97,6 +111,25 @@ export function buildExportHtmlDocument(options: ExportDocumentOptions): string 
       padding: 0;
       border-radius: 0;
       font-size: 0.88em;
+    }
+    .biu-diagram { margin: 1.25em 0; }
+    .biu-diagram-svg { display: flex; justify-content: center; overflow-x: auto; }
+    .biu-diagram-svg svg { max-width: 100%; height: auto; }
+    .biu-diagram-source {
+      margin: 0;
+      background: ${codeBg};
+      border: 1px solid ${border};
+      border-radius: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+    }
+    .biu-diagram-error {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border: 1px solid #d1242f;
+      border-radius: 8px;
+      color: #d1242f;
+      font-size: 0.85em;
     }
     table {
       border-collapse: collapse;

@@ -67,6 +67,16 @@ export function createAppMenuTemplate(options: AppMenuTemplateOptions): AppMenuI
     })
   }
 
+  // 生产环境的 Windows/Linux 不提供重新加载入口，避免用户误触丢失未保存内容
+  const reloadItems: AppMenuItem[] =
+    isMac || isDev
+      ? [
+          { role: 'reload', label: t('menu.reload') },
+          { role: 'forceReload', label: t('menu.forceReload') },
+          { type: 'separator' }
+        ]
+      : []
+
   template.push(
     {
       label: t('menu.file'),
@@ -102,9 +112,7 @@ export function createAppMenuTemplate(options: AppMenuTemplateOptions): AppMenuI
     {
       label: t('menu.view'),
       submenu: [
-        { role: 'reload', label: t('menu.reload') },
-        { role: 'forceReload', label: t('menu.forceReload') },
-        { type: 'separator' },
+        ...reloadItems,
         { role: 'resetZoom', label: t('menu.resetZoom') },
         { role: 'zoomIn', label: t('menu.zoomIn') },
         { role: 'zoomOut', label: t('menu.zoomOut') },

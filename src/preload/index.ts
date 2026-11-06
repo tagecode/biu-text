@@ -104,6 +104,12 @@ const languageAPI = {
   set: (language: AppLanguage): Promise<AppLanguage> => ipcRenderer.invoke(IPC.LANGUAGE_SET, language)
 }
 
+const imageAPI = {
+  setDocumentPath: (path: string | null): void => {
+    ipcRenderer.send(IPC.DOCUMENT_SET_PATH, path)
+  }
+}
+
 const windowAPI = {
   platform: process.platform,
 
@@ -133,6 +139,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('windowAPI', windowAPI)
     contextBridge.exposeInMainWorld('languageAPI', languageAPI)
     contextBridge.exposeInMainWorld('loginAPI', loginAPI)
+    contextBridge.exposeInMainWorld('imageAPI', imageAPI)
   } catch (error) {
     console.error(error)
   }
@@ -147,4 +154,6 @@ if (process.contextIsolated) {
   window.languageAPI = languageAPI
   // @ts-expect-error preload 的 Node 类型环境没有 DOM window
   window.loginAPI = loginAPI
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
+  window.imageAPI = imageAPI
 }

@@ -1,8 +1,10 @@
-import { app, shell, BrowserWindow, ipcMain, Menu, dialog, nativeTheme } from 'electron'
-import { join, basename, extname } from 'path'
-import { readFile, writeFile } from 'fs/promises'
+import { app, shell, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, protocol } from 'electron'
+import { join, basename, extname, dirname } from 'path'
+import { readFile, writeFile, realpath } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-channels'
+import { IMAGE_SCHEME } from '../shared/image-url'
+import { imageContentType, isInsideDirectory, resolveImageRequest } from './image-path'
 import { createAppMenuTemplate } from '../shared/i18n/menu-template'
 import { readLanguagePreference } from '../shared/i18n/read-language-preference'
 import { resolveLanguage } from '../shared/i18n/resolve-language'
@@ -14,7 +16,40 @@ let mainWindow: BrowserWindow | null = null
 let isReadyToClose = false
 let recentFiles: RecentFileRecord[] = []
 let currentLanguage: AppLanguage = 'en-US'
+let imageBaseDir: string | null = null
 const RECENT_FILES_LIMIT = 10
+
+// 必须在 app ready 之前注册，预览区才能从自定义协议加载本地图片
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: IMAGE_SCHEME,
+    privileges: { standard: true, secure: true, stream: true }
+  }
+])
+
+// ─── 预览图片协议 ───────────────────────────────────────────────
+
+function registerImageProtocol(): void {
+  protocol.handle(IMAGE_SCHEME, async (request) => {
+    const requested = new URL(request.url).searchParams.get('path') ?? ''
+    const baseDir = imageBaseDir
+    const target = baseDir ? resolveImageRequest(baseDir, requested) : null
+    if (!baseDir || !target) return new Response(null, { status: 403 })
+
+    const contentType = imageContentType(target)
+    if (!contentType) return new Response(null, { status: 403 })
+
+    try {
+      // realpath 兜底，防止文档目录内的软链接指向目录之外
+      const [realBase, realTarget] = await Promise.all([realpath(baseDir), realpath(target)])
+      if (!isInsideDirectory(realBase, realTarget)) return new Response(null, { status: 403 })
+      const data = await readFile(realTarget)
+      return new Response(data, { headers: { 'content-type': contentType } })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
+}
 
 function languageStorePath(): string {
   return join(app.getPath('userData'), 'language.json')
@@ -76,10 +111,6 @@ function createWindow(): void {
     }
   })
 
-  if (process.platform !== 'darwin') {
-    mainWindow.setMenuBarVisibility(false)
-  }
-
   mainWindow.on('ready-to-show', () => {
     mainWindow!.show()
   })
@@ -119,14 +150,9 @@ async function persistLanguage(language: AppLanguage): Promise<void> {
 }
 
 function buildMenu(): void {
-  if (process.platform !== 'darwin') {
-    Menu.setApplicationMenu(null)
-    return
-  }
-
   const template = createAppMenuTemplate({
     language: currentLanguage,
-    isMac: true,
+    isMac: process.platform === 'darwin',
     isDev: is.dev,
     appName: app.name,
     recentFiles: recentFiles.map((file) => ({
@@ -293,6 +319,11 @@ ipcMain.on(IPC.WINDOW_SET_TITLE, (_e, title: string) => {
   mainWindow?.setTitle(title)
 })
 
+// 图片读取范围跟随当前文档所在目录；未保存的新文档没有目录，图片一律拒绝
+ipcMain.on(IPC.DOCUMENT_SET_PATH, (_e, filePath: unknown) => {
+  imageBaseDir = typeof filePath === 'string' && filePath ? dirname(filePath) : null
+})
+
 ipcMain.handle(IPC.THEME_GET, () => {
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
 })
@@ -353,6 +384,7 @@ app.whenReady().then(async () => {
 
   await loadLanguage()
   await loadRecentFiles()
+  registerImageProtocol()
   buildMenu()
   createWindow()
 

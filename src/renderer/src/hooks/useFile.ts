@@ -35,6 +35,11 @@ export function useFile() {
     stateRef.current = { content, filePath, isDirty }
   }, [content, filePath, isDirty])
 
+  // 主进程据此限定预览图片的读取目录
+  useEffect(() => {
+    window.imageAPI.setDocumentPath(filePath)
+  }, [filePath])
+
   useEffect(() => {
     const onLanguageChanged = (code: string) => {
       const next = welcomeDocument(languageFrom(code))

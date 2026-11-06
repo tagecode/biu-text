@@ -116,6 +116,9 @@ const zhCN = {
     linkText: '链接文字',
     placeholder: '开始书写…'
   },
+  diagram: {
+    renderFailed: '图表渲染失败'
+  },
   welcome: {
     document: `# 欢迎使用 BiuText
 
@@ -276,6 +279,9 @@ const enUS = {
     linkText: 'link text',
     placeholder: 'Start writing…'
   },
+  diagram: {
+    renderFailed: 'Diagram failed to render'
+  },
   welcome: {
     document: `# Welcome to BiuText
 
@@ -435,6 +441,9 @@ const zhTW = {
   editor: {
     linkText: '連結文字',
     placeholder: '開始書寫…'
+  },
+  diagram: {
+    renderFailed: '圖表渲染失敗'
   },
   welcome: {
     document: `# 歡迎使用 BiuText

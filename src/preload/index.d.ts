@@ -46,6 +46,10 @@ interface LoginAPI {
   set: (openAtLogin: boolean) => Promise<boolean>
 }
 
+interface ImageAPI {
+  setDocumentPath: (path: string | null) => void
+}
+
 declare global {
   interface Window {
     fileAPI: FileAPI
@@ -53,5 +57,6 @@ declare global {
     windowAPI: WindowAPI
     languageAPI: LanguageAPI
     loginAPI: LoginAPI
+    imageAPI: ImageAPI
   }
 }

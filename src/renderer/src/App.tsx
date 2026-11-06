@@ -173,7 +173,7 @@ function App() {
   }, [filePath, t])
 
   const handleExportHtml = useCallback(async () => {
-    const html = buildExportHtmlDocument({
+    const html = await buildExportHtmlDocument({
       title: getExportTitle(),
       content,
       theme,
@@ -185,7 +185,7 @@ function App() {
   }, [content, theme, previewTheme, previewFontFamily, fontSize, getExportTitle, exportHtml])
 
   const handleExportPdf = useCallback(async () => {
-    const html = buildExportHtmlDocument({
+    const html = await buildExportHtmlDocument({
       title: getExportTitle(),
       content,
       theme,
@@ -264,6 +264,7 @@ function App() {
               <Preview
                 ref={previewScrollRef}
                 content={content}
+                documentPath={filePath}
                 theme={theme}
                 previewTheme={previewTheme}
                 previewFontFamily={previewFontFamily}

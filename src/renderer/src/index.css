@@ -317,6 +317,44 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* ── Mermaid 图表（预览与导出共用同一套类名） ────────────────────── */
+.biu-diagram {
+  margin: 1.25em 0;
+}
+
+.biu-diagram-svg {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.biu-diagram-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.biu-diagram-source {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  overflow-x: auto;
+}
+
+.biu-diagram-error {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--destructive);
+  border-radius: var(--radius);
+  color: var(--destructive);
+  font-size: 0.8125rem;
+}
+
 /* ── Electron 窗口拖拽区域 ───────────────────────────────────────── */
 .drag-region {
   -webkit-app-region: drag;

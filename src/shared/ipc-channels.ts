@@ -27,6 +27,9 @@ export const IPC = {
   // 窗口标题
   WINDOW_SET_TITLE: 'window:set-title',
 
+  // 当前文档路径（主进程据此限制预览图片的读取范围）
+  DOCUMENT_SET_PATH: 'document:set-path',
+
   // 主题
   THEME_GET: 'theme:get',
   THEME_SET: 'theme:set',

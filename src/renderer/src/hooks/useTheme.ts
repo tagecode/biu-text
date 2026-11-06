@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export type Theme = 'light' | 'dark'
 export type ThemeMode = Theme | 'system'
@@ -24,12 +24,9 @@ function applyTheme(theme: Theme) {
 
 export function useTheme() {
   const [themeMode, setThemeModeState] = useState<ThemeMode>(readStoredThemeMode)
-  const [theme, setTheme] = useState<Theme>('light')
-  const themeModeRef = useRef<ThemeMode>(themeMode)
-
-  useEffect(() => {
-    themeModeRef.current = themeMode
-  }, [themeMode])
+  // 仅当 themeMode 为 system 时参与派生，避免模式切换与系统推送相互覆盖
+  const [systemTheme, setSystemTheme] = useState<Theme>('light')
+  const theme: Theme = themeMode === 'system' ? systemTheme : themeMode
 
   useEffect(() => {
     window.themeAPI.set(themeMode)
@@ -40,11 +37,8 @@ export function useTheme() {
     }
 
     if (themeMode === 'system') {
-      window.themeAPI.get().then(setTheme)
-      return
+      window.themeAPI.get().then(setSystemTheme)
     }
-
-    setTheme(themeMode)
   }, [themeMode])
 
   useEffect(() => {
@@ -52,12 +46,7 @@ export function useTheme() {
   }, [theme])
 
   useEffect(() => {
-    const unsub = window.themeAPI.onChange((nextTheme) => {
-      if (themeModeRef.current === 'system') {
-        setTheme(nextTheme)
-      }
-    })
-    return unsub
+    return window.themeAPI.onChange(setSystemTheme)
   }, [])
 
   function setThemeMode(mode: ThemeMode) {
