@@ -11,7 +11,8 @@ import {
   Bold,
   Italic,
   Code,
-  Link
+  Link,
+  ImagePlus
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ interface ToolbarProps {
   onItalic: () => void
   onCode: () => void
   onLink: () => void
+  onInsertImage: () => void
   onOpenSettings: () => void
   wordCount: WordCountResult
 }
@@ -54,6 +56,7 @@ export function Toolbar({
   onItalic,
   onCode,
   onLink,
+  onInsertImage,
   onOpenSettings,
   wordCount
 }: ToolbarProps) {
@@ -110,6 +113,9 @@ export function Toolbar({
       </ToolbarButton>
       <ToolbarButton label={t('toolbar.link')} hint={shortcut('K')} onClick={onLink}>
         <Link className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton label={t('toolbar.insertImage')} onClick={onInsertImage}>
+        <ImagePlus className="size-3.5" />
       </ToolbarButton>
 
       {/* 右侧：字数统计摘要 */}

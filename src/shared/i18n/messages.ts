@@ -49,6 +49,7 @@ const zhCN = {
     allFiles: '所有文件',
     htmlFiles: 'HTML 文件',
     pdfFiles: 'PDF 文件',
+    imageFiles: '图片',
     unsavedTitle: '有未保存的更改',
     unsavedDetail: '「{{name}}」有未保存的更改，要保存吗？',
     save: '保存',
@@ -68,6 +69,7 @@ const zhCN = {
     italic: '斜体',
     code: '行内代码',
     link: '插入链接',
+    insertImage: '插入图片',
     wordSummary: '{{words}} 词 · {{chars}} 字符'
   },
   settings: {
@@ -85,6 +87,7 @@ const zhCN = {
     serif: '衬线',
     generalSection: '通用',
     editorSection: '编辑器',
+    imageSection: '图片',
     openAtLogin: '开机自启',
     autoSave: '自动保存',
     autoSaveOff: '关闭',
@@ -121,6 +124,13 @@ const zhCN = {
   },
   diagram: {
     renderFailed: '图表渲染失败'
+  },
+  image: {
+    insert: '插入图片',
+    saveFailed: '图片保存失败',
+    storage: '存储方式',
+    storageLocal: '本地（文档同目录 assets/）',
+    storageCloudSoon: '云图床（即将支持）'
   },
   welcome: {
     document: `# 欢迎使用 BiuText
@@ -215,6 +225,7 @@ const enUS = {
     allFiles: 'All Files',
     htmlFiles: 'HTML Files',
     pdfFiles: 'PDF Files',
+    imageFiles: 'Images',
     unsavedTitle: 'Unsaved Changes',
     unsavedDetail: '“{{name}}” has unsaved changes. Do you want to save them?',
     save: 'Save',
@@ -234,6 +245,7 @@ const enUS = {
     italic: 'Italic',
     code: 'Inline Code',
     link: 'Insert Link',
+    insertImage: 'Insert Image',
     wordSummary: '{{words}} words · {{chars}} characters'
   },
   settings: {
@@ -251,6 +263,7 @@ const enUS = {
     serif: 'Serif',
     generalSection: 'General',
     editorSection: 'Editor',
+    imageSection: 'Images',
     openAtLogin: 'Launch at login',
     autoSave: 'Auto Save',
     autoSaveOff: 'Off',
@@ -287,6 +300,13 @@ const enUS = {
   },
   diagram: {
     renderFailed: 'Diagram failed to render'
+  },
+  image: {
+    insert: 'Insert Image',
+    saveFailed: "Couldn't Save Image",
+    storage: 'Storage',
+    storageLocal: 'Local (assets/ next to the document)',
+    storageCloudSoon: 'Cloud storage (coming soon)'
   },
   welcome: {
     document: `# Welcome to BiuText
@@ -381,6 +401,7 @@ const zhTW = {
     allFiles: '所有檔案',
     htmlFiles: 'HTML 檔案',
     pdfFiles: 'PDF 檔案',
+    imageFiles: '圖片',
     unsavedTitle: '有尚未儲存的變更',
     unsavedDetail: '「{{name}}」有尚未儲存的變更，要儲存嗎？',
     save: '儲存',
@@ -400,6 +421,7 @@ const zhTW = {
     italic: '斜體',
     code: '行內程式碼',
     link: '插入連結',
+    insertImage: '插入圖片',
     wordSummary: '{{words}} 個詞 · {{chars}} 個字元'
   },
   settings: {
@@ -417,6 +439,7 @@ const zhTW = {
     serif: '襯線',
     generalSection: '一般',
     editorSection: '編輯器',
+    imageSection: '圖片',
     openAtLogin: '開機時啟動',
     autoSave: '自動儲存',
     autoSaveOff: '關閉',
@@ -453,6 +476,13 @@ const zhTW = {
   },
   diagram: {
     renderFailed: '圖表渲染失敗'
+  },
+  image: {
+    insert: '插入圖片',
+    saveFailed: '圖片儲存失敗',
+    storage: '儲存方式',
+    storageLocal: '本機（文件同目錄 assets/）',
+    storageCloudSoon: '雲端圖床（即將支援）'
   },
   welcome: {
     document: `# 歡迎使用 BiuText

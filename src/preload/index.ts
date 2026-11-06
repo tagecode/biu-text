@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppLanguage } from '../shared/i18n/types'
+import type { ImageFileInput } from '../shared/image-input'
 
 type UnsubFn = () => void
 
@@ -17,11 +18,11 @@ const fileAPI = {
   saveAs: (content: string): Promise<{ path: string } | null> =>
     ipcRenderer.invoke(IPC.FILE_SAVE_AS, { content }),
 
-  exportHtml: (html: string, fileName?: string): Promise<{ path: string } | null> =>
-    ipcRenderer.invoke(IPC.FILE_EXPORT_HTML, { html, fileName }),
+  exportHtml: (html: string, fileName?: string, documentPath?: string): Promise<{ path: string } | null> =>
+    ipcRenderer.invoke(IPC.FILE_EXPORT_HTML, { html, fileName, documentPath }),
 
-  exportPdf: (html: string, fileName?: string): Promise<{ path: string } | null> =>
-    ipcRenderer.invoke(IPC.FILE_EXPORT_PDF, { html, fileName }),
+  exportPdf: (html: string, fileName?: string, documentPath?: string): Promise<{ path: string } | null> =>
+    ipcRenderer.invoke(IPC.FILE_EXPORT_PDF, { html, fileName, documentPath }),
 
   onMenuNew: (cb: () => void): UnsubFn => {
     const handler = () => cb()
@@ -107,7 +108,13 @@ const languageAPI = {
 const imageAPI = {
   setDocumentPath: (path: string | null): void => {
     ipcRenderer.send(IPC.DOCUMENT_SET_PATH, path)
-  }
+  },
+
+  saveImages: (documentPath: string, files: ImageFileInput[]): Promise<string[]> =>
+    ipcRenderer.invoke(IPC.IMAGE_SAVE, { documentPath, files }),
+
+  pickImages: (documentPath: string): Promise<string[]> =>
+    ipcRenderer.invoke(IPC.IMAGE_PICK, documentPath)
 }
 
 const windowAPI = {

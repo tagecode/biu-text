@@ -16,6 +16,8 @@ import { useAppearanceSettings } from '@/hooks/useAppearanceSettings'
 import { useLoginItem } from '@/hooks/useLoginItem'
 import { useWordCount } from '@/hooks/useWordCount'
 import { buildExportHtmlDocument } from '@/lib/export-document'
+import { insertImageLinks } from '@/lib/image-insert'
+import type { ImageFileInput } from '@shared/image-input'
 
 // ─── Editor formatting helpers ───────────────────────────────────
 function wrapSelection(view: EditorView, before: string, after = before) {
@@ -78,7 +80,7 @@ function readStoredPreviewVisible(): boolean {
 // ─── App ─────────────────────────────────────────────────────────
 function App() {
   const { t } = useTranslation()
-  const { content, filePath, setContent, newFile, openFile, saveFile, autoSave, exportHtml, exportPdf } =
+  const { content, filePath, setContent, newFile, openFile, saveFile, saveDocument, autoSave, exportHtml, exportPdf } =
     useFile()
   const { theme, themeMode, setThemeMode, cycleThemeMode } = useTheme()
   const {
@@ -167,6 +169,24 @@ function App() {
     if (editorViewRef.current) insertLink(editorViewRef.current, t('editor.linkText'))
   }, [t])
 
+  // 图片一律写进文档同目录的 assets/，所以先确保文档已有落盘路径
+  const handleImageFiles = useCallback(
+    async (files: ImageFileInput[]): Promise<string[]> => {
+      const path = await saveDocument()
+      if (!path) return []
+      return window.imageAPI.saveImages(path, files)
+    },
+    [saveDocument]
+  )
+
+  const handleInsertImage = useCallback(async () => {
+    const path = await saveDocument()
+    if (!path) return
+    const paths = await window.imageAPI.pickImages(path)
+    const view = editorViewRef.current
+    if (view && paths.length > 0) insertImageLinks(view, paths)
+  }, [saveDocument])
+
   const getExportTitle = useCallback(() => {
     if (!filePath) return t('app.document')
     const normalized = filePath.replaceAll('\\', '/')
@@ -237,6 +257,7 @@ function App() {
           onItalic={handleItalic}
           onCode={handleCode}
           onLink={handleLink}
+          onInsertImage={handleInsertImage}
         />
 
         <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden">
@@ -254,6 +275,7 @@ function App() {
               previewScrollRef={previewScrollRef}
               onChange={setContent}
               onCursorChange={handleCursorChange}
+              onImageFiles={handleImageFiles}
             />
           </div>
 

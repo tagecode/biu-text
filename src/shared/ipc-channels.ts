@@ -33,6 +33,10 @@ export const IPC = {
   // 当前文档路径（主进程据此限制预览图片的读取范围）
   DOCUMENT_SET_PATH: 'document:set-path',
 
+  // 图片落盘到文档同目录的 assets/
+  IMAGE_SAVE: 'image:save',
+  IMAGE_PICK: 'image:pick',
+
   // 主题
   THEME_GET: 'theme:get',
   THEME_SET: 'theme:set',

@@ -66,20 +66,24 @@ export function useFile() {
     setContentState(val)
   }, [])
 
-  const saveFile = useCallback(async (): Promise<boolean> => {
+  // 有路径就直接写盘，没有路径走另存为；返回最终落盘的路径，取消时返回 null
+  const saveDocument = useCallback(async (): Promise<string | null> => {
     const { content: cur, filePath: path } = stateRef.current
     if (!path) {
-      // 没有路径，执行另存为
       const result = await window.fileAPI.saveAs(cur)
-      if (!result) return false
+      if (!result) return null
       setFilePath(result.path)
       setSavedContent(cur)
-      return true
+      return result.path
     }
     const { success } = await window.fileAPI.save(path, cur)
     if (success) setSavedContent(cur)
-    return success
+    return success ? path : null
   }, [])
+
+  const saveFile = useCallback(async (): Promise<boolean> => {
+    return (await saveDocument()) !== null
+  }, [saveDocument])
 
   // 新建/打开/关闭共用的脏检查：交给主进程弹三态对话框，选"保存"时真的写盘
   const confirmLeaveCurrentDocument = useCallback(async (): Promise<boolean> => {
@@ -139,13 +143,13 @@ export function useFile() {
   const exportHtml = useCallback(async (html: string) => {
     const { filePath: path } = stateRef.current
     const fileName = path ? path.replaceAll('\\', '/').split('/').pop() ?? undefined : undefined
-    await window.fileAPI.exportHtml(html, fileName)
+    await window.fileAPI.exportHtml(html, fileName, path ?? undefined)
   }, [])
 
   const exportPdf = useCallback(async (html: string) => {
     const { filePath: path } = stateRef.current
     const fileName = path ? path.replaceAll('\\', '/').split('/').pop() ?? undefined : undefined
-    await window.fileAPI.exportPdf(html, fileName)
+    await window.fileAPI.exportPdf(html, fileName, path ?? undefined)
   }, [])
 
   // 监听菜单事件
@@ -199,6 +203,7 @@ export function useFile() {
     newFile,
     openFile,
     saveFile,
+    saveDocument,
     autoSave,
     saveFileAs,
     exportHtml,

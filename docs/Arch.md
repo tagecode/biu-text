@@ -184,7 +184,7 @@ app.on('window-all-closed') // 非 macOS 退出
 | `windowAPI` | `platform` / `confirmDiscardChanges` / `setTitle` / `onWillClose` / `confirmClose` / `cancelClose` | 属性 / `invoke` / `send` / 主→渲染 |
 | `languageAPI` | `getSync` / `set` | `sendSync` / `invoke` |
 | `loginAPI` | `get` / `set` | `invoke` |
-| `imageAPI` | `setDocumentPath` | `send` |
+| `imageAPI` | `setDocumentPath` / `saveImages` / `pickImages` | `send` / `invoke` / `invoke` |
 
 类型契约维护在 `src/preload/index.d.ts`，通过 `declare global { interface Window { ... } }` 供渲染进程使用，并由 `tsconfig.web.json` 的 `include` 纳入类型检查。
 
@@ -206,6 +206,7 @@ app.on('window-all-closed') // 非 macOS 退出
 | 未保存确认 | `APP_CONFIRM_DISCARD` | 渲染 → 主 | `invoke/handle` |
 | 窗口 | `WINDOW_SET_TITLE` | 渲染 → 主 | `send` |
 | 图片目录 | `DOCUMENT_SET_PATH` | 渲染 → 主 | `send` |
+| 图片写入 | `IMAGE_SAVE`、`IMAGE_PICK` | 渲染 → 主 | `invoke/handle` |
 | 主题 | `THEME_GET`、`THEME_SET`、`THEME_CHANGED` | 双向 | `invoke` / `send` / `send` |
 | 语言 | `LANGUAGE_GET`、`LANGUAGE_SET` | 渲染 → 主 | `sendSync` / `invoke` |
 | 开机自启 | `LOGIN_GET`、`LOGIN_SET` | 渲染 → 主 | `invoke` |
@@ -277,12 +278,15 @@ biu-text/
 ├── src/
 │   ├── main/index.ts              # 主进程全部实现（约 415 行）
 │   ├── main/image-path.ts         # 预览图片的路径解析与目录白名单
+│   ├── main/image-save.ts         # 图片落盘：MIME/扩展名白名单、文件名清洗、重名递增
+│   ├── main/export-image.ts       # 导出前把相对图片内联成 data URI
 │   ├── preload/
 │   │   ├── index.ts               # contextBridge 门面
 │   │   └── index.d.ts             # window.* 全局类型声明
 │   ├── shared/
 │   │   ├── ipc-channels.ts        # IPC 常量
 │   │   ├── image-url.ts           # 相对路径 → biu-image:// 改写 + DOMPurify URI 白名单
+│   │   ├── image-input.ts         # 渲染 → 主传递图片字节的类型契约
 │   │   ├── diagram.ts             # 图表块结构 + 缓存键
 │   │   ├── editor-preferences.ts  # Tab/行高/行号/自动保存的归一化
 │   │   ├── recent-files.ts        # 最近文件解析、去重、时间格式化
@@ -322,6 +326,7 @@ biu-text/
 │           │   ├── markdown.ts          # markdown-it 单例与插件（含 mermaid 占位 fence 规则）
 │           │   ├── diagram-hydrate.ts   # 图表异步水合：懒加载、串行队列、缓存、降级
 │           │   ├── export-document.ts   # 独立 HTML 导出模板（导出前同步水合图表）
+│           │   ├── image-insert.ts      # 在光标处插入 ![](assets/…)，必要时换行
 │           │   ├── search-panel.ts      # 打开替换面板并聚焦
 │           │   └── utils.ts             # cn() 等
 │           └── types/vendor.d.ts
@@ -539,7 +544,7 @@ DOMPurify 是**唯一信任边界**：任何进入 `innerHTML` 的 HTML 都必�
 - **缓存隔离**：URL 追加 `&d=<当前文档路径>`。Chromium 的图片缓存按 URL 命中，若省掉这个参数，两个不同目录下同名的 `assets/pic.png` 会互相串图。主进程不读取该参数。
 - **消毒兼容**：DOMPurify 默认 `ALLOWED_URI_REGEXP` 会剥掉未知协议，因此预览侧覆盖为 `PREVIEW_ALLOWED_URI_REGEXP`（默认榜单 + `biu-image`）。`data:` 图片走 DOMPurify 的独立分支，不受影响。
 
-**已知边界**：相对图片在 PDF 导出中仍不渲染——打印窗口加载的是 `data:text/html`，`loadURL` 在图片完成前就已 resolve。HTML 导出保留相对路径，若导出文件与文档不在同一目录需自行调整。
+**已知边界**：相对图片在导出里靠内联 `data:` URI 落地（见 §8.9 与 §10.2），因此导出的文件不含 `assets/` 依赖；但若图片文件在导出后被删除或移动，预览会 403 而没有占位提示。HTML 导出同理——导出动作发生时已把图片烘焙进产物。
 
 ### 8.6 预览主题
 
@@ -593,6 +598,29 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 
 **已知边界**：图表占位块参与滚动同步的 DOM 高度计算，水合完成后高度会变化，滚动同步按比例重算，不会错位但可能有轻微跳动；超大图表（节点数百）会明显占用渲染时间，串行队列意味着它们会互相排队。
 
+### 8.9 本地图片写入（粘贴 / 拖放 / 工具栏）
+
+```text
+Editor 的 paste 捕获 / drop / 工具栏「插入图片」
+  └─ App.handleImageFiles(files) / handleInsertImage()
+       ├─ useFile.saveDocument()              无路径先弹另存为，取消则返回 null，整条链路中止
+       ├─ imageAPI.saveImages(path, files)    [invoke IMAGE_SAVE]  粘贴与拖放
+       │  或 imageAPI.pickImages(path)        [invoke IMAGE_PICK]  弹出系统选图对话框
+       └─ 主进程 saveImageAssets(documentPath, files)
+            ├─ mkdir <docDir>/assets           递归创建
+            ├─ readdir → 已用文件名集合
+            ├─ imageFileName()                  MIME 优先，其次原扩展名；两者都须通过 imageContentType 白名单
+            │   └─ 重名递增 a.png → a-2.png → a-3.png
+            └─ writeFile(Buffer)
+  └─ 返回 ["assets/a.png", …] → lib/image-insert.ts 在光标处插入 ![](assets/a.png)
+```
+
+- **目录来源**：`documentPath` 由渲染进程显式传入，而不是复用主进程里 `imageBaseDir` 的全局状态。若走全局，"另存为之后立刻插图"会有一帧窗口期把图片写进旧目录；显式传参让"路径"与"写入"是同一次调用，天然没有竞态。这与 `FILE_SAVE` 接受渲染进程传路径的信任模型一致。
+- **粘贴**：在捕获阶段拦截（`onPasteCapture`）。CodeMirror 自己的 paste 处理会在冒泡阶段把剪贴板里的文本也插进去，冒泡阶段再拦已经晚了；捕获阶段 `preventDefault + stopPropagation` 才能保证只有图片被处理。
+- **拖放**：`dragover` 必须 `preventDefault` 才允许 drop，同时置上高亮覆盖层；`dragleave` 用 `currentTarget.contains(relatedTarget)` 判断是否真的离开编辑区，避免子元素间移动时闪烁。`drop` 只要有文件就 `preventDefault`（否则 Electron 会导航到被拖入的文件），非图片文件静默丢弃；纯文本拖放不拦截，交还 CodeMirror。
+- **文件名清洗**（`src/main/image-save.ts`）：取 basename → 去扩展名 → 去 `: * ? " < > |` 与控制字符 → 空白转 `-` → 去首尾点和空格 → 截断 60 字符 → 为空则回退 `image`。路径分隔符在 basename 阶段就已消除，`../../etc/passwd.png` 只会得到 `passwd`。
+- **插入位置**（`src/renderer/src/lib/image-insert.ts`）：当前行还有其他文字时前后补换行，避免把图片挤进段落中间；多张图片一次插入，整段只是一条撤销记录。`alt` 取文件名去扩展名。
+
 ---
 
 ## 9. 文档生命周期
@@ -644,13 +672,14 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 - 内联一份精简 CSS（含明暗配色、GitHub/Notion 宽度差异、字体栈、表格滚动、`@page` 边距）。
 - 标题取自当前文件名（无文件时用本地化的"BiuText 文档"）。
 
-主进程接收 HTML 字符串，弹出保存对话框（默认名 `<原名>.html`），写入文件。
+主进程接收 HTML 字符串，先经 `inlineLocalImages()` 把 `<img src="assets/…">` 换成对应的 `data:` URI（见 §10.4），再弹保存对话框（默认名 `<原名>.html`）写入文件——导出的 HTML 不依赖 `assets/` 目录。
 
 ### 10.2 PDF 导出
 
 ```text
-渲染进程 buildExportHtmlDocument() → fileAPI.exportPdf(html)
-  └─ 主进程：保存对话框 → 新建隐藏 BrowserWindow({ show:false, sandbox:true, contextIsolation:true, nodeIntegration:false })
+渲染进程 buildExportHtmlDocument() → fileAPI.exportPdf(html, name, documentPath)
+  └─ 主进程：保存对话框 → inlineLocalImages(html, 文档目录)  相对图片 → data: URI
+       └─ 新建隐藏 BrowserWindow({ show:false, sandbox:true, contextIsolation:true, nodeIntegration:false })
        └─ loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
        └─ webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
        └─ writeFile(pdf) → finally: pdfWindow.destroy()
@@ -663,6 +692,22 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 - PDF 不包含页眉页脚、目录、分页控制；依赖 CSS `@page`。
 - 导出为一次性快照，不包含 TOC、引用跳转等交互能力。
 - 大文档导出时渲染进程会完整渲染一次（与预览同成本）。
+- 图片内联会把二进制塞进 HTML/PDF，文档图片多且大时导出体积与耗时同步上升。
+
+### 10.4 相对图片内联（`src/main/export-image.ts`）
+
+打印窗口加载的是 `data:text/html`，本身没有文档目录的概念，所以 `![](assets/a.png)` 这类相对引用在那里无处解析——这是 v0.4 之前"PDF 里图片全丢"的根因。做法是在 `loadURL` 之前把相对引用就地换成 `data:` URI：
+
+| 关注点 | 做法 |
+|--------|------|
+| 命中范围 | 正则扫描 `<img src="…">`；只处理相对路径（排除任意 scheme、`//`、`#`），远程图与 `data:` 原样保留 |
+| 越界防线 | 复用 `resolveImageRequest(baseDir, path)`，与预览走同一套目录白名单与 realpath 校验；读不到或越界就保留原样 |
+| 类型校验 | `imageContentType()` 不认的扩展名不内联 |
+| 去重 | 同一个 `src` 只读一次磁盘，多图引用同一文件不重复读 |
+| 编码 | HTML 实体先解码（`&amp;`/`&quot;`/`&#39;`/`&lt;`/`&gt;`）再拼路径 |
+| 失败策略 | 任何单张图失败都只是"这张不内联"，导出继续；整体不会抛错 |
+
+HTML 导出与 PDF 导出共用这一函数，因此两者得到的是同一份"自包含"产物。
 
 ---
 
@@ -791,10 +836,11 @@ CodeMirror 的面板文案不走 i18next，而是通过 `EditorState.phrases.of(
 |------|----------|------|
 | `contextIsolation: true` | 主窗口 webPreferences | 隔离预加载上下文 |
 | `nodeIntegration: false` | 主窗口 / 打印窗口 | 渲染进程无 Node |
-| preload 白名单 | `src/preload/index.ts` | 仅暴露 5 个门面，不暴露 `ipcRenderer` |
+| preload 白名单 | `src/preload/index.ts` | 仅暴露 6 个门面，不暴露 `ipcRenderer` |
 | CSP | `src/renderer/index.html` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: blob: https: biu-image:` |
 | HTML 消毒 | `Preview`、`export-document` | DOMPurify，允许 `target/rel` 属性；预览侧另放行 `biu-image:` 协议 |
 | 图片读取白名单 | `src/main/image-path.ts` | 仅限当前文档目录内的相对路径，扩展名必须为图片，`realpath` 兜底防软链接逃逸 |
+| 图片写入白名单 | `src/main/image-save.ts` | 只写 `<文档目录>/assets/`；文件名取 basename 后清洗，MIME 与扩展名都须命中图片类型，不合法直接拒绝 |
 | 外部链接 | `setWindowOpenHandler` → `shell.openExternal`，`action: 'deny'` | 阻断应用内开窗 |
 | 打印窗口隔离 | `sandbox: true` + 无 preload | 仅用于 `printToPDF` |
 | 文件操作集中于主进程 | 所有 fs 在 `src/main/index.ts` | 渲染进程无路径直通写权限 |
@@ -964,10 +1010,12 @@ renderMarkdown(content, { diagrams })        // 保持同步、纯函数
 
 **职责划分**：渲染进程负责捕获（粘贴/拖拽）与 Markdown 插入；**主进程负责上传与凭证**，渲染进程永不接触密钥。
 
+**现状**：捕获、落盘与插入已落地（本地存储，写 `<文档目录>/assets/`，见 §8.9）；下图为云端图床的目标形态，`IMAGE_UPLOAD` 与 provider 注册表尚未实现。
+
 ```text
-Editor DOM 事件（paste / drop）              // 当前未实现
+Editor DOM 事件（paste / drop）              // 已实现：本地写入
   └─ 取得 File/Blob
-  └─ 插入占位符 ![...](uploading:{id})
+  └─ 插入占位符 ![...](uploading:{id})        // 未实现：本地写入是同步落盘后直接插入最终路径
   └─ invoke IMAGE_UPLOAD { bytes, mime, hostType }
         └─ 主进程 providerRegistry[hostType].upload()
              ├─ 解密凭证（safeStorage）
@@ -990,7 +1038,7 @@ export interface ImageHostProvider {
 **关键架构约束**
 
 1. **CSP**：已显式声明 `img-src data: blob: https: biu-image:`，远程图片在预览区可加载；`connect-src` 仍保持 `'self'`，即上传请求必须由主进程发起。
-2. **本地图片**：已通过 `biu-image://` 自定义协议实现，读写范围限制在当前文档目录内（§8.5）。上传功能落地时复用同一套路径解析即可把本地文件读成字节流，无需再开新协议。
+2. **本地图片**：读写两侧都已落地——读走 `biu-image://`（§8.5），写走 `IMAGE_SAVE` 直接落盘（§8.9），读写范围都限制在当前文档目录内。云上传落地时复用同一套路径解析即可把本地文件读成字节流，无需再开新协议。
 3. **凭证存储**：`safeStorage.encryptString` + 配置文件；当前项目无 `electron-store`，需新增或自研 JSON 读写（与 `language.json` 一致的最小实现）。
 4. **错误语义**：按 PRD Q10，上传失败**不降级**到本地 `assets/`，保留占位符与重试。
 5. **进度通道**：复用 `webContents.send`，一次性请求 + 多次进度事件，需为每次上传分配 `uploadId` 避免串扰。
@@ -1035,7 +1083,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 
 | 版本 | 能力 | 主要改动点 | 架构风险 |
 |------|------|-----------|----------|
-| v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放、图床设置 UI | `markdown.ts`（fence 规则）、`diagram.ts` + `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`ipc-channels`、主进程图片模块、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决） |
+| v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts` + `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
 | v0.5 | 云图床、批量上传 | 主进程 provider 注册表、`safeStorage`、配置模块、进度 IPC | 凭证安全、网络失败语义 |
 | v1.0 | 内联渲染、ChartJS、Graphviz、导出增强 | CodeMirror ViewPlugin、渲染器注册表、导出管线 | 编辑体验回归、性能、缓存一致性 |
 | v1.1 | 多标签、文件树、Excalidraw | 文档模型重构、侧边栏布局、独立编辑窗口 | 单文档假设、状态迁移 |
@@ -1060,6 +1108,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R12 | ~~新建/打开不提示保存脏内容~~ **已修复** | 可能丢失未保存修改 | `useFile` 抽出 `confirmLeaveCurrentDocument()`，新建/打开/打开最近文件/关闭四条路径共用；选"保存"时执行真实写盘，写盘失败或另存为被取消则中止操作 |
 | R13 | 预览外链点击处理为兜底空操作，依赖主进程拦截 | 行为耦合、可读性差 | 明确由 `setWindowOpenHandler` 负责，移除或注释化渲染层监听 |
 | R14 | 5 个 Radix 包（dialog、dropdown-menu、scroll-area、toast、tooltip）已装未用 | 增大依赖体积与安装时间 | 按需移除，或在引入通知/对话框/Collapsible 时复用 |
+| R15 | 图片资产无生命周期管理 | 移动/重命名文档后 `assets/` 里的图片与 Markdown 断链；删除图片行不会回收文件；导出把图片内联成 `data:` 会让大图文档的 HTML/PDF 明显变大 | v0.5 做云图床时顺带引入"文档 → 资产"归属与孤儿清理；导出侧可加"内联/外链"开关 |
 
 ---
 

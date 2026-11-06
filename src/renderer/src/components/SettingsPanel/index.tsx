@@ -255,6 +255,23 @@ export function SettingsPanel({
               onCheckedChange={onShowLineNumbersChange}
             />
           </SettingRow>
+
+          <h3 className="text-xs font-medium sm:col-span-2">{t('settings.imageSection')}</h3>
+
+          {/* 目前只有本地存储一种实现，云图床留作占位 */}
+          <SettingField id="setting-image-storage" label={t('image.storage')} className="sm:col-span-2">
+            <Select value="local" onValueChange={() => undefined}>
+              <SelectTrigger id="setting-image-storage" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local">{t('image.storageLocal')}</SelectItem>
+                <SelectItem value="cloud" disabled>
+                  {t('image.storageCloudSoon')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingField>
         </div>
       </DialogContent>
     </Dialog>

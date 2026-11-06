@@ -1,10 +1,13 @@
 import { app, shell, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, protocol } from 'electron'
-import { join, basename, extname, dirname } from 'path'
-import { readFile, writeFile, realpath } from 'fs/promises'
+import { join, basename, extname, dirname, isAbsolute } from 'path'
+import { mkdir, readdir, readFile, writeFile, realpath } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-channels'
 import { IMAGE_SCHEME } from '../shared/image-url'
 import { imageContentType, isInsideDirectory, resolveImageRequest } from './image-path'
+import { imageFileName } from './image-save'
+import { inlineLocalImages } from './export-image'
+import type { ImageFileInput } from '../shared/image-input'
 import { createAppMenuTemplate } from '../shared/i18n/menu-template'
 import { readLanguagePreference } from '../shared/i18n/read-language-preference'
 import { resolveLanguage } from '../shared/i18n/resolve-language'
@@ -49,6 +52,35 @@ function registerImageProtocol(): void {
       return new Response(null, { status: 404 })
     }
   })
+}
+
+const IMAGE_DIALOG_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg']
+
+/** 未保存的新文档没有目录，暂时无法插图 */
+function documentDirectory(documentPath: unknown): string | null {
+  return typeof documentPath === 'string' && isAbsolute(documentPath) ? dirname(documentPath) : null
+}
+
+async function saveImageAssets(documentPath: unknown, files: unknown): Promise<string[]> {
+  const baseDir = documentDirectory(documentPath)
+  if (!baseDir || !Array.isArray(files)) return []
+
+  const assetsDir = join(baseDir, 'assets')
+  const saved: string[] = []
+  try {
+    await mkdir(assetsDir, { recursive: true })
+    const used = new Set(await readdir(assetsDir))
+    for (const file of files as ImageFileInput[]) {
+      const name = file ? imageFileName(file.name ?? '', file.mime ?? '', used) : null
+      if (!name || !file.bytes) continue
+      await writeFile(join(assetsDir, name), Buffer.from(file.bytes))
+      used.add(name)
+      saved.push(`assets/${name}`)
+    }
+  } catch (err) {
+    dialog.showErrorBox(t('image.saveFailed'), String(err))
+  }
+  return saved
 }
 
 function languageStorePath(): string {
@@ -241,9 +273,36 @@ ipcMain.handle(IPC.FILE_SAVE_AS, async (_e, { content }: { content: string }) =>
   }
 })
 
+ipcMain.handle(IPC.IMAGE_SAVE, (_e, payload: { documentPath?: unknown; files?: unknown }) =>
+  saveImageAssets(payload?.documentPath, payload?.files)
+)
+
+// 工具栏「插入图片」：选文件后直接由主进程读取，渲染进程拿不到任意路径
+ipcMain.handle(IPC.IMAGE_PICK, async (_e, documentPath: unknown) => {
+  if (!mainWindow) return []
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: t('image.insert'),
+    filters: [{ name: t('dialog.imageFiles'), extensions: IMAGE_DIALOG_EXTENSIONS }],
+    properties: ['openFile', 'multiSelections']
+  })
+  if (canceled || filePaths.length === 0) return []
+
+  const files: ImageFileInput[] = []
+  for (const filePath of filePaths) {
+    try {
+      const data = await readFile(filePath)
+      const bytes = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+      files.push({ bytes, name: basename(filePath), mime: imageContentType(filePath) ?? '' })
+    } catch {
+      // 单个文件读不出来不影响其余图片
+    }
+  }
+  return saveImageAssets(documentPath, files)
+})
+
 ipcMain.handle(
   IPC.FILE_EXPORT_HTML,
-  async (_e, { html, fileName }: { html: string; fileName?: string }) => {
+  async (_e, { html, fileName, documentPath }: { html: string; fileName?: string; documentPath?: string }) => {
     if (!mainWindow) return null
     const defaultName = `${getExportBaseName(fileName)}.html`
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -256,7 +315,8 @@ ipcMain.handle(
     })
     if (canceled || !filePath) return null
     try {
-      await writeFile(filePath, html, 'utf-8')
+      const selfContained = await inlineLocalImages(html, documentDirectory(documentPath) ?? imageBaseDir)
+      await writeFile(filePath, selfContained, 'utf-8')
       return { path: filePath }
     } catch (err) {
       dialog.showErrorBox(t('dialog.exportHtmlFailed'), String(err))
@@ -267,7 +327,7 @@ ipcMain.handle(
 
 ipcMain.handle(
   IPC.FILE_EXPORT_PDF,
-  async (_e, { html, fileName }: { html: string; fileName?: string }) => {
+  async (_e, { html, fileName, documentPath }: { html: string; fileName?: string; documentPath?: string }) => {
     if (!mainWindow) return null
     const defaultName = `${getExportBaseName(fileName)}.pdf`
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -280,6 +340,9 @@ ipcMain.handle(
     })
     if (canceled || !filePath) return null
 
+    // 打印窗口加载的是 data: URL，相对图片没有基准目录，先内联成 data URI
+    const printable = await inlineLocalImages(html, documentDirectory(documentPath) ?? imageBaseDir)
+
     let pdfWindow: BrowserWindow | null = null
     try {
       pdfWindow = new BrowserWindow({
@@ -290,7 +353,7 @@ ipcMain.handle(
           nodeIntegration: false
         }
       })
-      await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+      await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(printable)}`)
       const pdfData = await pdfWindow.webContents.printToPDF({
         printBackground: true,
         preferCSSPageSize: true
