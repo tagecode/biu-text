@@ -1,9 +1,9 @@
 # BiuText 技术架构文档
 
 > **文档版本**：v1.0
-> **对应代码版本**：v0.4.0（`package.json`）
-> **日期**：2026-11-06
-> **状态**：现行架构说明 + v0.4–v1.1 演进设计
+> **对应代码版本**：v0.5.0（`package.json`）
+> **日期**：2026-11-07
+> **状态**：现行架构说明 + v0.5–v1.1 演进设计
 > **关联文档**：[产品需求文档（PRD）](./PRD.md)
 
 ---
@@ -1175,7 +1175,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R1 | ~~非 macOS 不创建应用菜单，菜单级快捷键失效~~ **已修复** | Windows/Linux 用户无法使用 Ctrl+N/O/S 等 | 已改为全平台 `Menu.buildFromTemplate` + `setApplicationMenu`，Win/Linux 靠 `autoHideMenuBar` 收起菜单栏；生产版不注入 reload 项。剩余动作：Win/Linux 实机回归 §7.3 列出的加速键 |
 | R2 | 主窗口 `sandbox: false` | 预加载具备额外能力，攻击面略大 | 评估开启 sandbox 并验证预加载兼容性 |
 | R3 | `html: true` + DOMPurify 允许 `iframe` | 可嵌入外部页面，有钓鱼/隐私风险 | 移除 `iframe` 白名单或按域过滤 |
-| R4 | ~~CSP `default-src 'self'` 阻断远程图片与网络请求~~ **已修复** | 远程图片不显示；v0.4 图片功能受阻 | `img-src` 显式声明 `data: blob: https: biu-image:`；本地图片走自定义协议并按文档目录白名单读取（§8.5）；`connect-src` 维持关闭，上传仍由主进程发起。剩余：`https:` 任意来源的风险见 §13.3 |
+| R4 | ~~CSP `default-src 'self'` 阻断远程图片与网络请求~~ **已修复** | 远程图片不显示；v0.4 图片功能受阻 | `img-src` 显式声明 `data: blob: https: http://127.0.0.1:* http://localhost:* biu-image:`；本地图片走自定义协议并按文档目录白名单读取（§8.5）；`connect-src` 维持关闭，上传仍由主进程发起。剩余：`https:` 任意来源的风险见 §13.3 |
 | R5 | ~~markdown-it 同步渲染 vs 图表异步渲染~~ **已修复** | 直接影响 v0.4 实现路径 | `renderMarkdown` 保持同步，fence 输出占位块并把源码收进 `env.diagrams`；`hydrateDiagrams` 在提交后异步填充，具备取消、串行队列、按 `lang+theme+code` 缓存与失败降级（§8.8）。导出路径改为 async 并预水合为内联 SVG |
 | R6 | 全量重渲染预览 + O(n) 字数统计 | 大文档卡顿、滚动跳变 | 分块渲染/空闲调度/字数防抖；先用基准文档量化 |
 | R7 | 启动用 `sendSync` 取语言 | 主进程繁忙时阻塞首帧 | 可接受；若启动变慢改为预加载注入 + 异步切换 |
