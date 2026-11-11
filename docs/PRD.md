@@ -26,7 +26,7 @@
 | 预览区通过图标按钮打开/隐藏 | ✅ 已实现 | 工具栏图标操作，状态持久化 |
 | 独立设置面板 | ✅ 已实现 | 语言、开机自启、自动保存、Tab 宽度、行高、行号、图床（存储方式与凭证） |
 | 图片粘贴/上传（PicGo 风格） | ✅ 已实现（v0.5） | 本地模式写 `assets/`；云图床支持 GitHub 与自定义 HTTP，占位符 + 进度 + 失败重试（F-09） |
-| 图表支持（Mermaid / ChartJS / Graphviz） | 🟡 Mermaid 已实现 | 预览与导出均为内联 SVG，失败降级为源码 + 错误提示；ChartJS/Graphviz 计划 v1.0，见 F-10 |
+| 图表支持（Mermaid / ChartJS / Graphviz） | 🟡 ChartJS 预览与导出已实现 | Mermaid 为内联 SVG；ChartJS 预览为可悬停 Canvas，导出 HTML/PDF 为 PNG。失败降级为源码 + 错误提示。Graphviz 仍计划 v1.0，见 F-10 |
 | 编辑器内图表可视化（Typora 风格） | 🟡 图片与 Mermaid 已实现 | 图片缩略图、Mermaid 原位 SVG 已落地，可在设置中关闭。ChartJS / Graphviz 仍见 F-10 |
 | 多标签页 | ❌ 未实现 | 规划见 v1.1 |
 
@@ -78,7 +78,7 @@ BiuText 是一款面向开发者和写作者的**现代跨平台桌面端 Markdo
 | 预览安全 | DOMPurify | 渲染前对 HTML 消毒，防 XSS |
 | IPC 通信 | Electron contextBridge | 安全隔离的主/渲染进程通信 |
 | 国际化 | react-i18next + i18next | 多语言支持（简体中文、繁体中文、英文） |
-| **图表渲染** | **Mermaid（✅ 已引入）+ react-chartjs-2、Excalidraw（规划）** | **Mermaid 流程图/时序图已支持；数据图表与手绘图规划 v1.0+** |
+| **图表渲染** | **Mermaid、chart.js（✅ 已引入）、Excalidraw（规划）** | **Mermaid 与 ChartJS（柱状 / 折线 / 饼图 / 雷达）已支持预览与导出；手绘图规划 v1.1** |
 | **图片管理** | **自研上传模块（✅ 已落地，未引入 PicGo）** | **本地 `assets/` 与云图床自动上传；GitHub / 自定义 HTTP 已支持，其它厂商与 CDN 集成待补** |
 | **编辑器增强** | **CodeMirror 6 Widget / Decoration API** | **图片/图表内联可视化显示（规划 v1.0）** |
 
@@ -375,7 +375,7 @@ export const messages = {
 
 **技术依赖**：
 - `mermaid@^12.3.0`（✅ 已引入，懒加载）
-- `chart.js@^4.0.0` + `react-chartjs-2`
+- `chart.js@^4`（✅ 已引入，懒加载。预览保留 Canvas，导出栅格化为 PNG；不使用 react-chartjs-2，因为水合发生在 React 之外）
 - `@viz-js/viz@^3.0.0`（Graphviz）
 - `@excalidraw/excalidraw`（v1.1）
 
@@ -603,7 +603,7 @@ export const messages = {
   - [x] 编辑区图片显示缩略图（ViewPlugin + WidgetType）
   - [x] Mermaid 块光标移开时原位渲染小图（Decoration）
   - [x] 点击图表块切换源码/预览模式
-- [ ] **ChartJS**（P1）：复用附录 B 的渲染器注册机制 + `chart.js`，支持柱状图/折线图/饼图
+- [x] **ChartJS**（P1）：`chart.js` 渲染 `chartjs` 代码块的柱状图、折线图、饼图、雷达图。预览可悬停看数值；导出 HTML/PDF 收成 PNG。编辑区内联仍只覆盖图片和 Mermaid
 - [ ] **Graphviz DOT**（P2）：`@viz-js/viz` WASM 渲染
 - [ ] **导出增强**：HTML 导出内联 SVG；PDF 保留图表清晰度
 - [x] 设置面板新增：「启用内联渲染」开关（默认开启）
@@ -829,11 +829,11 @@ export async function hydrateDiagrams(root, blocks, { theme, signal }): Promise<
 
 #### B.4 导出
 
-`buildExportHtmlDocument` 为 async：在离屏 `div` 中先完成水合，再取 `innerHTML` 拼进导出模板。因此 HTML/PDF 里是**内联 SVG**，不是占位块。导出模板的 `<style>` 同步带上 `.biu-diagram*` 规则。
+`buildExportHtmlDocument` 为 async：在离屏 `div` 中先完成水合，再取 `innerHTML` 拼进导出模板。Mermaid 导出为**内联 SVG**，ChartJS 在读取 HTML 前把 Canvas 收成 PNG。导出模板的 `<style>` 同步带上 `.biu-diagram*` 规则。
 
 #### B.5 后续扩展
 
-原计划中的渲染器注册表（`registerDiagramRenderer` / `getDiagramRenderer`）**未实现**——当前只有一种图表语言，注册表属于"为一种实现写抽象"。v1.0 引入 ChartJS / Graphviz 时，先落地第二个实现，再据此抽象注册表。
+第二种图表落地后，分发放在 `diagram-hydrate.ts` 的 `diagramRenderers`：`mermaid` 走 SVG，`chartjs` 走 Canvas。这是按语言分发的小表，不是对外的 `registerDiagramRenderer`。Graphviz 接入时再加一项。
 
 ---
 
@@ -927,7 +927,7 @@ export function useImageUpload() {
 | 内联图片预览 | ✅ 完全所见即所得 | N/A | ✅ 编辑区缩略图 |
 | 图片上传 | ⚠️ 需手动配置 | ✅ 核心功能 | ✅ 内置多图床 |
 | Mermaid | ✅ 内置支持 | N/A | ✅ 实时渲染 |
-| ChartJS | ❌ | N/A | ✅ v1.0 |
+| ChartJS | ❌ | N/A | ✅ 预览与导出已实现 |
 | Excalidraw | ❌ | N/A | ✅ v1.1 |
 | 多标签页 | ❌ | N/A | ✅ v1.1 |
 | 导出 PDF | ✅ | N/A | ✅ 已实现 |

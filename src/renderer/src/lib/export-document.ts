@@ -39,13 +39,14 @@ export async function buildExportHtmlDocument(options: ExportDocumentOptions): P
     ADD_TAGS: ['iframe']
   })
 
-  // 导出件里不能留占位块：先把图表渲染成内联 SVG
+  // 导出件里不能留占位块：Mermaid 收成内联 SVG，ChartJS 收成 PNG
   if (diagrams.length > 0) {
     const container = document.createElement('div')
     container.innerHTML = html
     await hydrateDiagrams(container, diagrams, {
       theme,
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
+      rasterize: true
     })
     html = container.innerHTML
   }
@@ -115,6 +116,8 @@ export async function buildExportHtmlDocument(options: ExportDocumentOptions): P
     .biu-diagram { margin: 1.25em 0; }
     .biu-diagram-svg { display: flex; justify-content: center; overflow-x: auto; }
     .biu-diagram-svg svg { max-width: 100%; height: auto; }
+    .biu-diagram-chart { max-width: 40rem; margin: 0 auto; }
+    .biu-diagram-chart img { display: block; width: 100%; height: auto; }
     .biu-diagram-source {
       margin: 0;
       background: ${codeBg};

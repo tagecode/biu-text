@@ -123,7 +123,8 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 | 编辑器 | CodeMirror 6（`@uiw/react-codemirror`） | `^4.25.8` | Markdown 语言包 + one-dark |
 | Markdown | markdown-it | `^14.1.1` | 扩展插件见 §8.2 |
 | 代码高亮 | highlight.js | `^11.11.1` | `highlight` 回调 |
-| 图表 | mermaid | `^12.3.0` | 懒加载独立 chunk（约 1.1MB），仅首次遇到图表时拉取；见 §8.8 |
+| 图表 | mermaid | `^12.3.0` | 懒加载独立 chunk（约 1.1MB），仅首次遇到 Mermaid 时拉取；见 §8.8 |
+| 数据图表 | chart.js | `^4.6.1` | 懒加载，仅首次遇到 `chartjs` 块时拉取；见 §8.8 |
 | 数学公式 | KaTeX（@traptitech 插件） | `^0.16.38` / `^3.6.0` | `$...$`、`$$...$$` |
 | 消毒 | DOMPurify | `^3.3.2` | 预览与导出共用的信任边界 |
 | 预览样式 | github-markdown-css | `^5.9.0` | 预置 GitHub 主题，Notion 为主题覆盖 |
@@ -135,7 +136,6 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 
 | 能力 | 依赖 | 目标版本 | 引入时点 |
 |------|------|----------|----------|
-| 数据图表 | `chart.js` + `react-chartjs-2` | `^4` | v1.0 |
 | Graphviz | `@viz-js/viz` | `^3` | v1.0 |
 | 手绘图 | `@excalidraw/excalidraw` | — | v1.1 |
 | 配置存储 | `electron-store` | — | v0.5（图床配置） |
@@ -610,7 +610,7 @@ DOMPurify 是**唯一信任边界**：任何进入 `innerHTML` 的 HTML 都必�
 
 `Preview` 为 `forwardRef`，向外暴露滚动容器，供编辑器做滚动同步。`useDebounce` 的定时器在内容变化时清理，组件卸载时无残留订阅（点击监听在 `useEffect` 中注册并在清理函数中移除）。
 
-### 8.8 图表水合（Mermaid）
+### 8.8 图表水合（Mermaid / ChartJS）
 
 **为什么要分两段**：`mermaid.render()` 返回 Promise，且需要真实 DOM 与布局；把它写进 fence 规则会让 `renderMarkdown` 变成异步，破坏"同步纯函数"这一被预览与导出共用的前提（ADR-005）。此外 mermaid 打包后约 1.1MB，不能进主 bundle。
 
@@ -620,7 +620,7 @@ DOMPurify 是**唯一信任边界**：任何进入 `innerHTML` 的 HTML 都必�
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const lang = tokens[idx].info.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
   const diagrams = env?.diagrams
-  if (diagrams && lang === 'mermaid') {
+  if (diagrams && isDiagramLang(lang)) {
     const id = `d${diagrams.length}`
     diagrams.push({ id, lang, code: tokens[idx].content })
     return `<div class="biu-diagram" data-diagram-id="${id}" data-diagram-lang="${lang}" data-diagram-state="pending"></div>`
@@ -648,7 +648,9 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 
 **降级路径**：命中占位块后**先**把源码块（`<pre class="biu-diagram-source">`）填进去，再尝试渲染——这样图表在排队或失败时不会是空白。渲染抛错时把状态置为 `error`，追加 `i18n.t('diagram.renderFailed')` 与原始错误信息，源码块保留。错误只影响当前块，循环继续处理下一个。
 
-**导出**：`buildExportHtmlDocument` 为 async。它在离屏 `div` 内先完成水合，再取 `innerHTML` 拼进模板，因此 HTML/PDF 导出得到的是**内联 SVG** 而非占位块；导出模板的 `<style>` 里也带上 `.biu-diagram*` 规则以保持居中与横向滚动。导出不走缓存命中以外的优化——一次导出只发生一次渲染。
+**ChartJS**：`chartjs` 不进入 mermaid 队列。`chart-render.ts` 懒加载 `chart.js`，只注册柱状、折线、饼图、雷达需要的控制器。配置先过 `parseChartConfig`（`src/shared/chart.ts`）：只接受 JSON，类型限定 `bar | line | pie | radar`，数据必须是有限数字。非法配置分别提示 `diagram.invalidJson`、`unsupportedType`、`missingData`。预览保留 Canvas（关闭动画，悬停仍可用）；导出传 `rasterize: true`，画完后换成 PNG 并销毁 Chart。预览取消时同样销毁实例。ChartJS 不进 SVG 缓存。编辑区内联渲染不处理 `chartjs` 块。
+
+**导出**：`buildExportHtmlDocument` 为 async。它在离屏 `div` 内先完成水合，再取 `innerHTML` 拼进模板。Mermaid 得到**内联 SVG**，ChartJS 得到 PNG。导出模板的 `<style>` 里也带上 `.biu-diagram*` 规则。
 
 **已知边界**：图表占位块参与滚动同步的 DOM 高度计算，水合完成后高度会变化，滚动同步按比例重算，不会错位但可能有轻微跳动；超大图表（节点数百）会明显占用渲染时间，串行队列意味着它们会互相排队。
 
@@ -1032,9 +1034,9 @@ renderer: root: src/renderer, input: index.html,
 
 ## 16. 演进架构（v0.4–v1.1）
 
-以下为在现有架构上的最小侵入式扩展方案。§16.1 的 Mermaid 部分已落地（实现细节见 §8.8），其余仍为**设计意图**，未实现。
+以下为在现有架构上的最小侵入式扩展方案。§16.1 的 Mermaid 与 ChartJS 已落地（实现细节见 §8.8），Graphviz 与导出预览模式仍为**设计意图**。
 
-### 16.1 图表渲染子系统（Mermaid 已落地）
+### 16.1 图表渲染子系统（Mermaid 与 ChartJS 已落地）
 
 **核心矛盾**：`markdown-it.render()` 是**同步**的，而 `mermaid.render()` 返回 Promise。直接把异步渲染塞进 fence 规则会破坏现有同步管线。
 
@@ -1042,33 +1044,36 @@ renderer: root: src/renderer, input: index.html,
 
 ```text
 renderMarkdown(content, { diagrams })        // 保持同步、纯函数
-  └─ fence 规则命中 mermaid
+  └─ fence 规则命中 mermaid / chartjs
        └─ diagrams.push({ id, lang, code })
        └─ 输出 <div class="biu-diagram" data-diagram-id data-diagram-state="pending">
        └─ DOMPurify 消毒（保持现有边界）
        └─ Preview 的 useEffect → hydrateDiagrams(container, diagrams, { theme, signal })
-            └─ 先填源码块 → 查缓存 → 未命中则串行排队调 mermaid.render()
-            └─ 成功后挂载（DOMPurify 二次消毒的）SVG，失败显示错误态并保留源码
+            └─ mermaid：先填源码块 → 查缓存 → 未命中则串行排队调 mermaid.render() → 挂载消毒后的 SVG
+            └─ chartjs：解析 JSON → 挂载 Canvas；导出时再收成 PNG
+            └─ 失败显示错误态并保留源码
 ```
 
 **实际模块**（非原设计的注册表）
 
 | 文件 | 职责 |
 |------|------|
-| `src/shared/diagram.ts` | `DiagramBlock` 结构与 `diagramCacheKey(block, theme)` |
-| `src/renderer/src/lib/diagram-hydrate.ts` | 懒加载 mermaid、初始化、串行队列、SVG 缓存、取消、降级 |
+| `src/shared/diagram.ts` | `DiagramBlock`、`isDiagramLang`、`diagramCacheKey(block, theme)` |
+| `src/shared/chart.ts` | `parseChartConfig`：只接受白名单类型和数值 |
+| `src/renderer/src/lib/diagram-hydrate.ts` | 按语言分发；Mermaid 的懒加载、串行队列、SVG 缓存、取消、降级 |
+| `src/renderer/src/lib/chart-render.ts` | ChartJS 懒加载、主题配色、预览 Canvas、导出 PNG |
 
-原设计里的 `DiagramRenderer` 注册表（`registerDiagramRenderer` / `getDiagramRenderer`）**未实现**：当前只有一种图表语言，注册表属于"为一种实现写抽象"。等 ChartJS / Graphviz 真正进来时再抽，那时才有第二个消费者来决定接口形状。
+分发放在 `diagram-hydrate.ts` 的 `diagramRenderers`：`mermaid` 走 SVG，`chartjs` 走 Canvas。这是按语言分发的小表，不是对外的 `registerDiagramRenderer`。Graphviz 接入时再加一项。
 
 **约束与要点（均已满足）**
 
 - 渲染结果缓存以 `lang + theme + code` 为键，命中直接复用 SVG（LRU 上限 60）。
 - 渲染失败回退为源码块 + 错误信息，不中断后续块。
 - Mermaid 固定 `securityLevel: 'strict'`；SVG 输出再经 `DOMPurify.sanitize(..., { USE_PROFILES: { svg: true, svgFilters: true } })`。
-- 导出 HTML/PDF 前完成水合，以**内联 SVG** 形式进入导出文件。
+- 导出 HTML/PDF 前完成水合。Mermaid 以**内联 SVG** 进入导出文件，ChartJS 以 PNG 进入。
 - 主题切换按主题分键，天然不会串色。
 
-**后续（v1.0）**：ChartJS 与 Graphviz 需要先落地"第二个渲染器"，届时再引入注册表，并把 `diagram-hydrate.ts` 里的 mermaid 专用逻辑降级为其中一个实现。
+**后续（v1.0）**：Graphviz 再往 `diagramRenderers` 加一项。编辑区内联仍只覆盖图片和 Mermaid。
 
 ### 16.2 图片上传子系统
 
@@ -1163,7 +1168,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 |------|------|-----------|----------|
 | v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、工具栏「插入 Mermaid」（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts`（`MERMAID_SNIPPET`）+ `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`block-insert.ts`（块插入）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
 | v0.5 | 云图床（✅ GitHub + 自定义 HTTP 已落地）、上传占位符与重试（✅）、进度条（✅）、测试连接（✅）、批量上传（✅ 多选/多文件粘贴）、其余厂商图床（未做） | `shared/image-host.ts`、`main/image-host-store.ts`、`main/http-upload.ts`、`main/image-host-providers.ts`、`IMAGE_HOST_*` / `IMAGE_UPLOAD` / `IMAGE_UPLOAD_PROGRESS` 通道、`useImageHost` / `useImageUpload` / `upload-placeholder` / `upload-store`、`SettingsPanel/ImageHostSettings`、`UploadIndicator`、Toast 动作按钮 | 凭证安全（已用 `safeStorage`，明文降级见 §13.3）、网络失败语义（已定：保留占位符 + 重试）、进度串扰（已用 `uploadId` 隔离） |
-| v1.0 | 内联渲染、ChartJS、Graphviz、导出增强 | CodeMirror ViewPlugin、渲染器注册表、导出管线 | 编辑体验回归、性能、缓存一致性 |
+| v1.0 | 内联渲染（✅ v0.6）、ChartJS 预览与导出（✅）、Graphviz（未做）、导出预览模式（未做） | CodeMirror ViewPlugin、`diagramRenderers`、导出管线 | 编辑体验回归、性能、缓存一致性 |
 | v1.1 | 多标签、文件树、Excalidraw | 文档模型重构、侧边栏布局、独立编辑窗口 | 单文档假设、状态迁移 |
 
 ---

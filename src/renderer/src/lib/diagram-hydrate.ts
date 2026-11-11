@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify'
+import { renderChartDiagram } from '@/lib/chart-render'
 import i18n from '@/i18n'
 import { diagramCacheKey, type DiagramBlock } from '@shared/diagram'
 import type { Theme } from '@/hooks/useTheme'
@@ -105,6 +106,8 @@ function mountError(host: HTMLElement, error: unknown): void {
 export interface HydrateDiagramsOptions {
   theme: Theme
   signal: AbortSignal
+  /** 导出时把 Canvas 收成图片，预览区保持可悬停的图表 */
+  rasterize?: boolean
 }
 
 /**
@@ -114,7 +117,7 @@ export interface HydrateDiagramsOptions {
 export async function hydrateDiagrams(
   root: ParentNode,
   blocks: DiagramBlock[],
-  { theme, signal }: HydrateDiagramsOptions
+  { theme, signal, rasterize = false }: HydrateDiagramsOptions
 ): Promise<void> {
   for (const block of blocks) {
     if (signal.aborted) return
@@ -123,12 +126,35 @@ export async function hydrateDiagrams(
     showSource(host, block)
 
     try {
-      const svg = await renderDiagramSvg(block, theme)
+      const renderer = getDiagramRenderer(block.lang)
+      if (!renderer) throw new Error(i18n.t('diagram.unsupportedType'))
+      await renderer(host, block, theme, signal, rasterize)
       if (signal.aborted) return
-      mountSvg(host, svg)
     } catch (error) {
       if (signal.aborted) return
+      showSource(host, block)
       mountError(host, error)
     }
   }
+}
+
+type DiagramRenderer = (
+  host: HTMLElement,
+  block: DiagramBlock,
+  theme: Theme,
+  signal: AbortSignal,
+  rasterize: boolean
+) => Promise<void>
+
+const diagramRenderers: Record<string, DiagramRenderer> = {
+  mermaid: async (host, block, theme, signal) => {
+    const svg = await renderDiagramSvg(block, theme)
+    if (signal.aborted) return
+    mountSvg(host, svg)
+  },
+  chartjs: renderChartDiagram
+}
+
+function getDiagramRenderer(lang: string): DiagramRenderer | undefined {
+  return diagramRenderers[lang]
 }

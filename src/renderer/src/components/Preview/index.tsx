@@ -58,6 +58,11 @@ export const Preview = forwardRef<HTMLDivElement, PreviewProps>(
       }
     }, [debouncedContent, documentPath])
 
+    // 必须稳住这个对象。React 按引用比较 dangerouslySetInnerHTML，
+    // 每次渲染都新建一份会把 innerHTML 写回去，水合出来的图表被清掉，
+    // 而内容没变时 effect 不会重跑。光标移动就会触发这种渲染。
+    const previewHtml = useMemo(() => ({ __html: rendered.html }), [rendered.html])
+
     // 图表是异步渲染的：HTML 提交后再水合；内容/主题/语言变化都会重建，旧渲染被 abort
     useEffect(() => {
       const container = innerRef.current
@@ -84,7 +89,7 @@ export const Preview = forwardRef<HTMLDivElement, PreviewProps>(
         <article
           className="markdown-body max-w-3xl mx-auto"
           style={{ fontSize: `${fontSize}px` }}
-          dangerouslySetInnerHTML={{ __html: rendered.html }}
+          dangerouslySetInnerHTML={previewHtml}
         />
       </div>
     )

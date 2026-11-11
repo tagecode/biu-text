@@ -425,6 +425,18 @@
   height: auto;
 }
 
+.biu-diagram-chart {
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.biu-diagram-chart canvas,
+.biu-diagram-chart img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .biu-diagram-source {
   margin: 0;
   padding: 0.75rem 1rem;

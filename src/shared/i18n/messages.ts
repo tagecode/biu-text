@@ -127,6 +127,9 @@ const zhCN = {
   },
   diagram: {
     renderFailed: '图表渲染失败',
+    invalidJson: '图表配置不是有效的 JSON',
+    unsupportedType: '不支持的图表类型',
+    missingData: '图表数据不完整',
     showSource: '源码',
     showPreview: '预览'
   },
@@ -342,6 +345,9 @@ const enUS = {
   },
   diagram: {
     renderFailed: 'Diagram failed to render',
+    invalidJson: 'Chart config is not valid JSON',
+    unsupportedType: 'Unsupported chart type',
+    missingData: 'Chart data is incomplete',
     showSource: 'Source',
     showPreview: 'Preview'
   },
@@ -557,6 +563,9 @@ const zhTW = {
   },
   diagram: {
     renderFailed: '圖表渲染失敗',
+    invalidJson: '圖表設定不是有效的 JSON',
+    unsupportedType: '不支援的圖表類型',
+    missingData: '圖表資料不完整',
     showSource: '原始碼',
     showPreview: '預覽'
   },

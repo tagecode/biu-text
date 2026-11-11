@@ -5,6 +5,7 @@ import { full as markdownItEmoji } from 'markdown-it-emoji'
 import taskLists from 'markdown-it-task-lists'
 import markdownItKatex from '@traptitech/markdown-it-katex'
 import type { DiagramBlock } from '@shared/diagram'
+import { isDiagramLang } from '@shared/diagram'
 
 function escapeHtml(value: string): string {
   return value
@@ -98,7 +99,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const diagrams = env?.diagrams as DiagramCollector | undefined
   const lang = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
-  if (diagrams && lang === 'mermaid') {
+  if (diagrams && isDiagramLang(lang)) {
     const id = `d${diagrams.length}`
     diagrams.push({ id, lang, code: token.content })
     return `<div class="biu-diagram" data-diagram-id="${id}" data-diagram-lang="${lang}" data-diagram-state="pending"></div>\n`
