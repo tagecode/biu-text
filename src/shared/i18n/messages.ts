@@ -96,7 +96,10 @@ const zhCN = {
     autoSave300: '5 分钟',
     tabWidth: 'Tab 宽度',
     lineHeight: '行高',
-    showLineNumbers: '显示行号'
+    showLineNumbers: '显示行号',
+    inlineRender: '启用内联渲染',
+    save: '保存设置',
+    saved: '设置已保存'
   },
   appearance: {
     light: '亮色',
@@ -123,7 +126,9 @@ const zhCN = {
     placeholder: '开始书写…'
   },
   diagram: {
-    renderFailed: '图表渲染失败'
+    renderFailed: '图表渲染失败',
+    showSource: '源码',
+    showPreview: '预览'
   },
   notify: {
     exported: '已导出 {{name}}',
@@ -131,6 +136,7 @@ const zhCN = {
   },
   image: {
     insert: '插入图片',
+    inlineFailed: '图片无法显示',
     saveFailed: '图片保存失败',
     storage: '存储方式',
     storageLocal: '本地（文档同目录 assets/）',
@@ -146,15 +152,13 @@ const zhCN = {
     customField: '文件字段名',
     customPath: '响应中的 URL 路径',
     customHeaders: '请求头（每行一个 Key: Value）',
-    test: '测试连接',
-    testing: '测试中…',
-    testOk: '连接正常：{{url}}',
-    testFailed: '连接测试失败',
+    test: '测试图床连接',
+    testing: '正在测试图床…',
+    testOk: '图床连接正常：{{url}}',
+    testFailed: '图床连接测试失败',
     invalidConfig: '图床配置不完整',
-    save: '保存',
-    cancel: '取消',
-    cancelDone: '已撤销未保存的修改',
-    saved: '图床设置已保存',
+    cancel: '撤销图床修改',
+    cancelDone: '已撤销未保存的图床修改',
     invalidRepo: '请填写 owner/repo 形式的仓库',
     invalidToken: '请填写访问令牌',
     invalidUrl: '上传地址必须是 https，只有本机回环地址可用 http'
@@ -307,7 +311,10 @@ const enUS = {
     autoSave300: '5 minutes',
     tabWidth: 'Tab Width',
     lineHeight: 'Line Height',
-    showLineNumbers: 'Show line numbers'
+    showLineNumbers: 'Show line numbers',
+    inlineRender: 'Enable inline rendering',
+    save: 'Save settings',
+    saved: 'Settings saved'
   },
   appearance: {
     light: 'Light',
@@ -334,7 +341,9 @@ const enUS = {
     placeholder: 'Start writing…'
   },
   diagram: {
-    renderFailed: 'Diagram failed to render'
+    renderFailed: 'Diagram failed to render',
+    showSource: 'Source',
+    showPreview: 'Preview'
   },
   notify: {
     exported: 'Exported {{name}}',
@@ -342,6 +351,7 @@ const enUS = {
   },
   image: {
     insert: 'Insert Image',
+    inlineFailed: "Couldn't display image",
     saveFailed: "Couldn't Save Image",
     storage: 'Storage',
     storageLocal: 'Local (assets/ next to the document)',
@@ -357,15 +367,13 @@ const enUS = {
     customField: 'File field name',
     customPath: 'URL field in the response',
     customHeaders: 'Headers (one Key: Value per line)',
-    test: 'Test connection',
-    testing: 'Testing…',
-    testOk: 'Connection OK: {{url}}',
-    testFailed: 'Connection test failed',
+    test: 'Test image host',
+    testing: 'Testing image host…',
+    testOk: 'Image host connected: {{url}}',
+    testFailed: 'Image host connection failed',
     invalidConfig: 'Incomplete image host settings',
-    save: 'Save',
-    cancel: 'Cancel',
-    cancelDone: 'Unsaved changes discarded',
-    saved: 'Image host settings saved',
+    cancel: 'Discard image host edits',
+    cancelDone: 'Unsaved image host edits discarded',
     invalidRepo: 'Enter the repository as owner/repo',
     invalidToken: 'Enter an access token',
     invalidUrl: 'The upload URL must use https; plain http is only allowed on localhost'
@@ -518,7 +526,10 @@ const zhTW = {
     autoSave300: '5 分鐘',
     tabWidth: 'Tab 寬度',
     lineHeight: '行高',
-    showLineNumbers: '顯示行號'
+    showLineNumbers: '顯示行號',
+    inlineRender: '啟用內嵌渲染',
+    save: '儲存設定',
+    saved: '設定已儲存'
   },
   appearance: {
     light: '淺色',
@@ -545,7 +556,9 @@ const zhTW = {
     placeholder: '開始書寫…'
   },
   diagram: {
-    renderFailed: '圖表渲染失敗'
+    renderFailed: '圖表渲染失敗',
+    showSource: '原始碼',
+    showPreview: '預覽'
   },
   notify: {
     exported: '已匯出 {{name}}',
@@ -553,6 +566,7 @@ const zhTW = {
   },
   image: {
     insert: '插入圖片',
+    inlineFailed: '圖片無法顯示',
     saveFailed: '圖片儲存失敗',
     storage: '儲存方式',
     storageLocal: '本機（文件同目錄 assets/）',
@@ -568,15 +582,13 @@ const zhTW = {
     customField: '檔案欄位名稱',
     customPath: '回應中的 URL 路徑',
     customHeaders: '請求標頭（每行一個 Key: Value）',
-    test: '測試連線',
-    testing: '測試中…',
-    testOk: '連線正常：{{url}}',
-    testFailed: '連線測試失敗',
+    test: '測試圖床連線',
+    testing: '正在測試圖床…',
+    testOk: '圖床連線正常：{{url}}',
+    testFailed: '圖床連線測試失敗',
     invalidConfig: '圖床設定不完整',
-    save: '儲存',
-    cancel: '取消',
-    cancelDone: '已復原未儲存的變更',
-    saved: '圖床設定已儲存',
+    cancel: '復原圖床修改',
+    cancelDone: '已復原未儲存的圖床修改',
     invalidRepo: '請填寫 owner/repo 形式的儲存庫',
     invalidToken: '請填寫存取權杖',
     invalidUrl: '上傳位址必須是 https，只有本機回環位址可用 http'

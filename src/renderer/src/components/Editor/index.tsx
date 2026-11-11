@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, MutableRefObject } from 'react'
+import { useCallback, useMemo, useRef, useState, MutableRefObject } from 'react'
 import type { ClipboardEvent, DragEvent } from 'react'
 import i18n from '@/i18n'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
@@ -13,6 +13,8 @@ import { searchPhrases } from '@shared/search-phrases'
 import type { ImageFileInput } from '@shared/image-input'
 import { openReplacePanel } from '@/lib/search-panel'
 import { insertImageLinks } from '@/lib/image-insert'
+import { inlineImages } from '@/lib/inline-image'
+import { inlineDiagrams } from '@/lib/inline-diagram'
 import type { EditorFontFamily } from '@/hooks/useAppearanceSettings'
 import type { Theme } from '@/hooks/useTheme'
 
@@ -24,6 +26,8 @@ interface EditorProps {
   tabWidth: number
   lineHeight: number
   showLineNumbers: boolean
+  inlineRender: boolean
+  documentPath: string | null
   editorViewRef: MutableRefObject<EditorView | null>
   previewScrollRef: MutableRefObject<HTMLDivElement | null>
   onChange: (value: string) => void
@@ -87,6 +91,8 @@ export function Editor({
   tabWidth,
   lineHeight,
   showLineNumbers,
+  inlineRender,
+  documentPath,
   editorViewRef,
   previewScrollRef,
   onChange,
@@ -97,7 +103,7 @@ export function Editor({
   const [dragActive, setDragActive] = useState(false)
 
   const language = resolveLanguage(i18n.language, i18n.language)
-  const extensions = [
+  const extensions = useMemo(() => [
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
     indentUnit.of(' '.repeat(tabWidth)),
@@ -136,8 +142,21 @@ export function Editor({
           }
         }
       ])
-    )
-  ]
+    ),
+    ...(inlineRender
+      ? [
+          inlineImages({ documentPath, errorLabel: i18n.t('image.inlineFailed') }),
+          inlineDiagrams({
+            theme,
+            labels: {
+              source: i18n.t('diagram.showSource'),
+              preview: i18n.t('diagram.showPreview'),
+              renderFailed: i18n.t('diagram.renderFailed')
+            }
+          })
+        ]
+      : [])
+  ], [tabWidth, language, inlineRender, documentPath, theme])
 
   const handleCreateEditor = useCallback(
     (view: EditorView) => {

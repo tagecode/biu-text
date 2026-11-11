@@ -99,6 +99,7 @@ function App() {
     tabWidth,
     lineHeight,
     showLineNumbers,
+    inlineRender,
     autoSaveSeconds,
     setEditorFontFamily,
     setPreviewFontFamily,
@@ -107,6 +108,7 @@ function App() {
     setTabWidth,
     setLineHeight,
     setShowLineNumbers,
+    setInlineRender,
     setAutoSaveSeconds
   } = useAppearanceSettings()
   const { openAtLogin, setOpenAtLogin } = useLoginItem()
@@ -307,6 +309,8 @@ function App() {
               tabWidth={tabWidth}
               lineHeight={lineHeight}
               showLineNumbers={showLineNumbers}
+              inlineRender={inlineRender}
+              documentPath={filePath}
               editorViewRef={editorViewRef}
               previewScrollRef={previewScrollRef}
               onChange={setContent}
@@ -356,6 +360,7 @@ function App() {
           tabWidth={tabWidth}
           lineHeight={lineHeight}
           showLineNumbers={showLineNumbers}
+          inlineRender={inlineRender}
           autoSaveSeconds={autoSaveSeconds}
           openAtLogin={openAtLogin}
           imageHost={imageHost}
@@ -369,6 +374,7 @@ function App() {
           onTabWidthChange={setTabWidth}
           onLineHeightChange={setLineHeight}
           onShowLineNumbersChange={setShowLineNumbers}
+          onInlineRenderChange={setInlineRender}
           onAutoSaveSecondsChange={setAutoSaveSeconds}
           onOpenAtLoginChange={(value) => {
             void setOpenAtLogin(value)

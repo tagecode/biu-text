@@ -7,7 +7,8 @@ describe('readEditorPreferences', () => {
       tabWidth: 2,
       lineHeight: 1.4,
       showLineNumbers: true,
-      autoSaveSeconds: 0
+      autoSaveSeconds: 0,
+      inlineRender: true
     })
   })
 
@@ -17,13 +18,15 @@ describe('readEditorPreferences', () => {
         tabWidth: 4,
         lineHeight: 1.25,
         showLineNumbers: false,
-        autoSaveSeconds: 60
+        autoSaveSeconds: 60,
+        inlineRender: false
       })
     ).toEqual({
       tabWidth: 4,
       lineHeight: 1.3,
       showLineNumbers: false,
-      autoSaveSeconds: 60
+      autoSaveSeconds: 60,
+      inlineRender: false
     })
 
     expect(
@@ -31,13 +34,15 @@ describe('readEditorPreferences', () => {
         tabWidth: 3,
         lineHeight: 9,
         showLineNumbers: 'yes',
-        autoSaveSeconds: 15
+        autoSaveSeconds: 15,
+        inlineRender: 'yes'
       })
     ).toEqual({
       tabWidth: 2,
       lineHeight: 2,
       showLineNumbers: true,
-      autoSaveSeconds: 0
+      autoSaveSeconds: 0,
+      inlineRender: true
     })
   })
 })

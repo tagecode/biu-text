@@ -18,6 +18,7 @@ interface AppearanceState {
   lineHeight: number
   showLineNumbers: boolean
   autoSaveSeconds: AutoSaveSeconds
+  inlineRender: boolean
 }
 
 const STORAGE_KEY = 'biu-text:appearance'
@@ -85,6 +86,7 @@ export function useAppearanceSettings() {
       setAppearance((prev) => ({ ...prev, lineHeight: readEditorPreferences({ lineHeight }).lineHeight })),
     setShowLineNumbers: (showLineNumbers: boolean) =>
       setAppearance((prev) => ({ ...prev, showLineNumbers })),
+    setInlineRender: (inlineRender: boolean) => setAppearance((prev) => ({ ...prev, inlineRender })),
     setAutoSaveSeconds: (autoSaveSeconds: AutoSaveSeconds) =>
       setAppearance((prev) => ({ ...prev, autoSaveSeconds }))
   }

@@ -13,6 +13,7 @@ export interface EditorPreferences {
   lineHeight: number
   showLineNumbers: boolean
   autoSaveSeconds: AutoSaveSeconds
+  inlineRender: boolean
 }
 
 export function normalizeTabWidth(value: unknown): TabWidth {
@@ -33,6 +34,10 @@ export function normalizeAutoSaveSeconds(value: unknown): AutoSaveSeconds {
   return value === 30 || value === 60 || value === 300 ? value : 0
 }
 
+export function normalizeInlineRender(value: unknown): boolean {
+  return value === false ? false : true
+}
+
 export function readEditorPreferences(
   parsed: Partial<Record<keyof EditorPreferences, unknown>> | null
 ): EditorPreferences {
@@ -40,6 +45,7 @@ export function readEditorPreferences(
     tabWidth: normalizeTabWidth(parsed?.tabWidth),
     lineHeight: normalizeLineHeight(parsed?.lineHeight),
     showLineNumbers: normalizeShowLineNumbers(parsed?.showLineNumbers),
-    autoSaveSeconds: normalizeAutoSaveSeconds(parsed?.autoSaveSeconds)
+    autoSaveSeconds: normalizeAutoSaveSeconds(parsed?.autoSaveSeconds),
+    inlineRender: normalizeInlineRender(parsed?.inlineRender)
   }
 }

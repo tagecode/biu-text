@@ -196,6 +196,93 @@
   line-height: var(--editor-line-height, 1.4);
 }
 
+/* ── 编辑区内联图片 ─────────────────────────────────────────────── */
+.cm-inline-image {
+  display: inline-block;
+  margin: 0.2rem 0;
+  line-height: 0;
+  vertical-align: top;
+  cursor: pointer;
+}
+
+.cm-inline-image-thumb {
+  display: block;
+  max-height: 100px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+}
+
+.cm-inline-image-preview {
+  position: fixed;
+  z-index: 40;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popover);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.cm-inline-image-preview img {
+  display: block;
+  max-width: min(640px, 70vw);
+  max-height: min(70vh, 640px);
+  width: auto;
+  height: auto;
+}
+
+.cm-inline-image-error {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  line-height: 1.4;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--destructive);
+  border-radius: var(--radius);
+  color: var(--destructive);
+  font-size: 0.75rem;
+}
+
+/* ── 编辑区内联 Mermaid ─────────────────────────────────────────── */
+.cm-inline-diagram {
+  position: relative;
+  margin: 0.4rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+}
+
+.cm-inline-diagram .biu-diagram {
+  margin: 0;
+  padding: 1.6rem 0.75rem 0.75rem;
+}
+
+.cm-inline-diagram-bar {
+  display: flex;
+  margin: 0.35rem 0 0.15rem;
+}
+
+.cm-inline-diagram-toggle {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding: 0.1rem 0.45rem;
+  cursor: pointer;
+}
+
+.cm-inline-diagram .cm-inline-diagram-toggle {
+  position: absolute;
+  z-index: 1;
+  top: 0.35rem;
+  left: 0.35rem;
+}
+
 /* ── 预览字体族 ─────────────────────────────────────────────────── */
 .preview-font-sans .markdown-body {
   font-family:

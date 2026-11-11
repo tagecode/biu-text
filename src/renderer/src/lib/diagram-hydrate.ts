@@ -57,6 +57,22 @@ function rememberSvg(key: string, svg: string): void {
   svgCache.set(key, svg)
 }
 
+/** 预览区和编辑区内联预览共用同一条串行队列与缓存。 */
+export async function renderDiagramSvg(block: DiagramBlock, theme: Theme): Promise<string> {
+  const key = diagramCacheKey(block, theme)
+  const cached = svgCache.get(key)
+  if (cached) return cached
+  return enqueue(async () => {
+    const hit = svgCache.get(key)
+    if (hit) return hit
+    const mermaid = await getMermaid(theme)
+    const result = await mermaid.render(`biu-diagram-${++renderSeq}`, block.code)
+    const svg = sanitizeSvg(result.svg)
+    rememberSvg(key, svg)
+    return svg
+  })
+}
+
 function showSource(host: HTMLElement, block: DiagramBlock): void {
   const pre = document.createElement('pre')
   pre.className = 'biu-diagram-source'
@@ -106,21 +122,9 @@ export async function hydrateDiagrams(
     if (!host) continue
     showSource(host, block)
 
-    const key = diagramCacheKey(block, theme)
-    const cached = svgCache.get(key)
-    if (cached) {
-      mountSvg(host, cached)
-      continue
-    }
-
     try {
-      const svg = await enqueue(async () => {
-        const mermaid = await getMermaid(theme)
-        const result = await mermaid.render(`biu-diagram-${++renderSeq}`, block.code)
-        return sanitizeSvg(result.svg)
-      })
+      const svg = await renderDiagramSvg(block, theme)
       if (signal.aborted) return
-      rememberSvg(key, svg)
       mountSvg(host, svg)
     } catch (error) {
       if (signal.aborted) return

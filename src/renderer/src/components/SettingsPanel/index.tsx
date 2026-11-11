@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,8 @@ import type {
 import { AUTO_SAVE_SECONDS, TAB_WIDTHS, type AutoSaveSeconds, type TabWidth } from '@shared/editor-preferences'
 import type { ThemeMode } from '@/hooks/useTheme'
 import type { ImageHostConfigView } from '@shared/image-host'
-import { ImageHostSettings } from './ImageHostSettings'
+import { toast } from '@/lib/toast-store'
+import { ImageHostSettings, type ImageHostSettingsHandle } from './ImageHostSettings'
 
 interface SettingsPanelProps {
   open: boolean
@@ -29,6 +30,7 @@ interface SettingsPanelProps {
   tabWidth: TabWidth
   lineHeight: number
   showLineNumbers: boolean
+  inlineRender: boolean
   autoSaveSeconds: AutoSaveSeconds
   openAtLogin: boolean
   imageHost: ImageHostConfigView | null
@@ -41,6 +43,7 @@ interface SettingsPanelProps {
   onTabWidthChange: (value: TabWidth) => void
   onLineHeightChange: (value: number) => void
   onShowLineNumbersChange: (value: boolean) => void
+  onInlineRenderChange: (value: boolean) => void
   onAutoSaveSecondsChange: (value: AutoSaveSeconds) => void
   onOpenAtLoginChange: (value: boolean) => void
   onSaveImageHost: (view: ImageHostConfigView) => Promise<void>
@@ -56,6 +59,7 @@ export function SettingsPanel({
   tabWidth,
   lineHeight,
   showLineNumbers,
+  inlineRender,
   autoSaveSeconds,
   openAtLogin,
   imageHost,
@@ -68,12 +72,26 @@ export function SettingsPanel({
   onTabWidthChange,
   onLineHeightChange,
   onShowLineNumbersChange,
+  onInlineRenderChange,
   onAutoSaveSecondsChange,
   onOpenAtLoginChange,
   onSaveImageHost
 }: SettingsPanelProps) {
   const { t } = useTranslation()
   const { language, setLanguage } = useAppLanguage()
+  const imageSettingsRef = useRef<ImageHostSettingsHandle>(null)
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      // 语言、外观、编辑器在修改时已经记下；这里一并提交图床草稿
+      const saved = await imageSettingsRef.current?.save()
+      if (saved) toast({ level: 'success', title: t('settings.saved') })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Dialog
@@ -251,9 +269,26 @@ export function SettingsPanel({
             />
           </SettingRow>
 
+          <SettingRow>
+            <Label htmlFor="setting-inline-render" className="text-xs font-normal text-muted-foreground">
+              {t('settings.inlineRender')}
+            </Label>
+            <Switch
+              id="setting-inline-render"
+              checked={inlineRender}
+              onCheckedChange={onInlineRenderChange}
+            />
+          </SettingRow>
+
           <h3 className="text-xs font-medium sm:col-span-2">{t('settings.imageSection')}</h3>
 
-          <ImageHostSettings config={imageHost} onSave={onSaveImageHost} />
+          <ImageHostSettings ref={imageSettingsRef} config={imageHost} onSave={onSaveImageHost} />
+        </div>
+
+        <div className="flex justify-end border-t px-4 py-3">
+          <Button size="sm" disabled={saving || !imageHost} onClick={() => void handleSave()}>
+            {t('settings.save')}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

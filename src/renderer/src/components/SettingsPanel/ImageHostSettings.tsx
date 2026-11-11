@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,11 @@ interface ImageHostSettingsProps {
   onSave: (view: ImageHostConfigView) => Promise<void>
 }
 
+export interface ImageHostSettingsHandle {
+  /** 写入当前图床草稿。校验失败或写入失败时返回 false。 */
+  save: () => Promise<boolean>
+}
+
 function Field({ id, label, className, children }: { id: string; label: string; className?: string; children: ReactNode }) {
   return (
     <div className={`grid gap-1.5 ${className ?? ''}`}>
@@ -31,7 +36,8 @@ function Field({ id, label, className, children }: { id: string; label: string; 
 }
 
 /** 图床配置：本地不需要参数，GitHub / 自定义接口各自一组字段 */
-export function ImageHostSettings({ config, onSave }: ImageHostSettingsProps) {
+export const ImageHostSettings = forwardRef<ImageHostSettingsHandle, ImageHostSettingsProps>(
+  function ImageHostSettings({ config, onSave }, ref) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<ImageHostConfigView | null>(config)
   const [headersText, setHeadersText] = useState('')
@@ -46,17 +52,21 @@ export function ImageHostSettings({ config, onSave }: ImageHostSettingsProps) {
     setTokenEdited(false)
   }, [config])
 
-  if (!draft) return null
+  const github = draft?.github
+  const custom = draft?.custom
 
-  const github = draft.github
-  const custom = draft.custom
-
-  const withDraft = (next: Partial<ImageHostConfigView>) => setDraft({ ...draft, ...next })
+  const withDraft = (next: Partial<ImageHostConfigView>) => {
+    if (!draft) return
+    setDraft({ ...draft, ...next })
+  }
 
   // 没有可撤销的改动时「取消」置灰，避免点了没反应
   const savedHeadersText = formatHeaderLines(config?.custom.headers ?? {})
   const dirty =
+    !!draft &&
     !!config &&
+    !!github &&
+    !!custom &&
     (draft.type !== config.type ||
       github.repo !== config.github.repo ||
       github.branch !== config.github.branch ||
@@ -68,27 +78,31 @@ export function ImageHostSettings({ config, onSave }: ImageHostSettingsProps) {
       headersText !== savedHeadersText)
 
   // 没动过令牌框时沿用已保存的；动过就以框里的内容为准（清空 = 没有令牌）
-  const hasToken = tokenEdited ? github.tokenMasked.trim() !== '' : github.tokenSaved
+  const hasToken = tokenEdited ? (github?.tokenMasked.trim() ?? '') !== '' : !!github?.tokenSaved
 
-  // 配置还填不全时「测试连接」置灰，省得点了只换来一句报错
+  // 图床还填不全时「测试图床连接」置灰，省得点了只换来一句报错
   const canTest =
-    draft.type === 'github'
-      ? github.repo.includes('/') && hasToken
-      : isSecureEndpoint(custom.url)
+    draft?.type === 'github'
+      ? !!github && github.repo.includes('/') && hasToken
+      : !!custom && isSecureEndpoint(custom.url)
 
   const validate = (): string | null => {
+    if (!draft) return null
     if (draft.type === 'github') {
-      if (!github.repo.includes('/')) return t('image.invalidRepo')
+      if (!github?.repo.includes('/')) return t('image.invalidRepo')
       if (!hasToken) return t('image.invalidToken')
     }
-    if (draft.type === 'custom' && !isSecureEndpoint(custom.url)) return t('image.invalidUrl')
+    if (draft.type === 'custom' && !isSecureEndpoint(custom?.url ?? '')) return t('image.invalidUrl')
     return null
   }
 
-  const draftView = (): ImageHostConfigView => ({
-    ...draft,
-    custom: { ...custom, headers: parseHeaderLines(headersText) }
-  })
+  const draftView = (): ImageHostConfigView | null => {
+    if (!draft || !custom) return null
+    return {
+      ...draft,
+      custom: { ...custom, headers: parseHeaderLines(headersText) }
+    }
+  }
 
   const reportInvalid = (): boolean => {
     const error = validate()
@@ -97,23 +111,32 @@ export function ImageHostSettings({ config, onSave }: ImageHostSettingsProps) {
     return true
   }
 
-  const handleSave = async () => {
-    if (reportInvalid()) return
-    setBusy('save')
-    try {
-      await onSave(draftView())
-      toast({ level: 'success', title: t('image.saved') })
-    } catch {
-      // 主进程已弹「保存失败」通知；草稿原样保留，方便直接重试
-    } finally {
-      setBusy(null)
+  useImperativeHandle(ref, () => ({
+    save: async () => {
+      const view = draftView()
+      if (!view) return true
+      if (!dirty) return true
+      if (reportInvalid()) return false
+      setBusy('save')
+      try {
+        await onSave(view)
+        return true
+      } catch {
+        // 主进程已弹「保存失败」通知；草稿原样保留，方便直接重试
+        return false
+      } finally {
+        setBusy(null)
+      }
     }
-  }
+  }))
+
+  if (!draft || !github || !custom) return null
 
   const handleCancel = () => {
     if (!config) return
     setDraft(config)
     setHeadersText(formatHeaderLines(config.custom.headers))
+    setTokenEdited(false)
     toast({ level: 'info', title: t('image.cancelDone') })
   }
 
@@ -122,7 +145,9 @@ export function ImageHostSettings({ config, onSave }: ImageHostSettingsProps) {
     setBusy('test')
     try {
       // 只把草稿拿去测，不落盘：否则主进程回传的脱敏值会把输入框里的令牌换掉
-      const res = await window.imageAPI.testHost(draftView())
+      const view = draftView()
+      if (!view) return
+      const res = await window.imageAPI.testHost(view)
       if (res.ok) {
         toast({ level: 'success', title: t('image.testOk', { url: res.url }) })
       } else {
@@ -253,10 +278,7 @@ export function ImageHostSettings({ config, onSave }: ImageHostSettingsProps) {
         <Button size="sm" variant="outline" disabled={busy !== null || !dirty} onClick={handleCancel}>
           {t('image.cancel')}
         </Button>
-        <Button size="sm" disabled={busy !== null} onClick={() => void handleSave()}>
-          {t('image.save')}
-        </Button>
       </div>
     </>
   )
-}
+})
