@@ -14,7 +14,7 @@ export function diagramCacheKey(block: DiagramBlock, theme: 'light' | 'dark'): s
 /** 工具栏「插入 Mermaid」插入的脚手架：能直接渲染出图，用户在此基础上改 */
 export const MERMAID_SNIPPET = '```mermaid\nflowchart TD\n  A[Start] --> B[End]\n```'
 
-const DIAGRAM_LANGS = new Set(['mermaid', 'chartjs'])
+const DIAGRAM_LANGS = new Set(['mermaid', 'chartjs', 'dot'])
 
 /** 预览区会水合的围栏语言。新增一种图表时在这里登记，并提供对应渲染器。 */
 export function isDiagramLang(lang: string): boolean {

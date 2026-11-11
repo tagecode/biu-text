@@ -30,6 +30,7 @@ describe('isDiagramLang', () => {
   it('accepts the diagram fences the preview can hydrate', () => {
     expect(isDiagramLang('mermaid')).toBe(true)
     expect(isDiagramLang('chartjs')).toBe(true)
+    expect(isDiagramLang('dot')).toBe(true)
     expect(isDiagramLang('javascript')).toBe(false)
     expect(isDiagramLang('')).toBe(false)
   })

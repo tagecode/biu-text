@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import { renderChartDiagram } from '@/lib/chart-render'
+import { renderGraphvizSvg } from '@/lib/graphviz-render'
 import i18n from '@/i18n'
 import { diagramCacheKey, type DiagramBlock } from '@shared/diagram'
 import type { Theme } from '@/hooks/useTheme'
@@ -152,7 +153,12 @@ const diagramRenderers: Record<string, DiagramRenderer> = {
     if (signal.aborted) return
     mountSvg(host, svg)
   },
-  chartjs: renderChartDiagram
+  chartjs: renderChartDiagram,
+  dot: async (host, block, theme, signal) => {
+    const svg = await renderGraphvizSvg(block, theme)
+    if (signal.aborted) return
+    mountSvg(host, svg)
+  }
 }
 
 function getDiagramRenderer(lang: string): DiagramRenderer | undefined {
