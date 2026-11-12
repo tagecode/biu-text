@@ -991,7 +991,7 @@ renderer: root: src/renderer, input: index.html,
 **`.github/workflows/ci.yml`（质量门禁）**：
 
 - 触发：任意分支 `push`、`pull_request`，以及被 `release.yml` 通过 `workflow_call` 复用。
-- 单 job（`ubuntu-latest`，Node 24）顺序执行：`npm ci` → `lint` → `typecheck` → `test` → `check:i18n` → `build` → `xvfb-run npx playwright test`。
+- 单 job（`ubuntu-24.04`，Node 24）顺序执行：`npm ci` → `lint` → `typecheck` → `test` → `check:i18n` → `build` → `xvfb-run npx playwright test`。
 - 用固定 registry 与 Electron 镜像地址，避免 runner 地域差异导致的下载失败。
 - `permissions: contents: read`，最小权限。
 
@@ -999,7 +999,7 @@ renderer: root: src/renderer, input: index.html,
 
 - 触发：推送 `v*` 标签或手动触发。
 - `quality` job 复用 `ci.yml`；三平台矩阵 `build` job 声明 `needs: quality`，**门禁不过则不打包**。
-- 矩阵：`macos-latest` / `windows-latest` / `ubuntu-latest`，Node 24，`npm ci`。
+- 矩阵：`macos-latest` / `windows-latest` / `ubuntu-24.04`，Node 24，`npm ci`。
 - 步骤：`npm run build:<platform>`（electron-vite 构建 + electron-builder 打包）。
 - 产物：`*.dmg`、`*.exe`、`*.AppImage`、`*.deb` 上传为 artifact。
 - 发布：tag 触发时由 `softprops/action-gh-release` 创建 GitHub Release 并附上产物。
