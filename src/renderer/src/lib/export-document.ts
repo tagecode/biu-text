@@ -12,6 +12,7 @@ interface ExportDocumentOptions {
   previewTheme: PreviewTheme
   previewFontFamily: PreviewFontFamily
   fontSize: number
+  signal?: AbortSignal
 }
 
 function escapeHtml(value: string): string {
@@ -30,7 +31,8 @@ export async function buildExportHtmlDocument(options: ExportDocumentOptions): P
     theme,
     previewTheme,
     previewFontFamily,
-    fontSize
+    fontSize,
+    signal
   } = options
 
   const diagrams: DiagramBlock[] = []
@@ -39,15 +41,16 @@ export async function buildExportHtmlDocument(options: ExportDocumentOptions): P
     ADD_TAGS: ['iframe']
   })
 
-  // 导出件里不能留占位块：Mermaid 收成内联 SVG，ChartJS 收成 PNG
+  // 导出件里不能留占位块：Mermaid / Graphviz 收成内联 SVG，ChartJS 收成高分辨率 PNG
   if (diagrams.length > 0) {
     const container = document.createElement('div')
     container.innerHTML = html
     await hydrateDiagrams(container, diagrams, {
       theme,
-      signal: new AbortController().signal,
+      signal: signal ?? new AbortController().signal,
       rasterize: true
     })
+    if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
     html = container.innerHTML
   }
 
@@ -151,6 +154,9 @@ export async function buildExportHtmlDocument(options: ExportDocumentOptions): P
       margin: 1.8em 0;
     }
     img { max-width: 100%; height: auto; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
     @page { margin: 16mm 14mm; }
   </style>
 </head>

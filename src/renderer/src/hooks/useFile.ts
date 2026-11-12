@@ -148,13 +148,13 @@ export function useFile() {
   const exportHtml = useCallback(async (html: string) => {
     const { filePath: path } = stateRef.current
     const fileName = path ? path.replaceAll('\\', '/').split('/').pop() ?? undefined : undefined
-    await window.fileAPI.exportHtml(html, fileName, path ?? undefined)
+    return window.fileAPI.exportHtml(html, fileName, path ?? undefined)
   }, [])
 
   const exportPdf = useCallback(async (html: string) => {
     const { filePath: path } = stateRef.current
     const fileName = path ? path.replaceAll('\\', '/').split('/').pop() ?? undefined : undefined
-    await window.fileAPI.exportPdf(html, fileName, path ?? undefined)
+    return window.fileAPI.exportPdf(html, fileName, path ?? undefined)
   }, [])
 
   // 监听菜单事件

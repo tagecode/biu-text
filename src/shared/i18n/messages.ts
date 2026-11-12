@@ -121,6 +121,12 @@ const zhCN = {
     untitled: '未命名',
     document: 'BiuText 文档'
   },
+  exportPreview: {
+    title: '导出预览',
+    hint: '这里看到的就是将要导出的版面。',
+    preparing: '正在准备预览…',
+    theme: '配色'
+  },
   editor: {
     linkText: '链接文字',
     placeholder: '开始书写…'
@@ -339,6 +345,12 @@ const enUS = {
     untitled: 'Untitled',
     document: 'BiuText Document'
   },
+  exportPreview: {
+    title: 'Export preview',
+    hint: 'This is the page that will be exported.',
+    preparing: 'Preparing preview…',
+    theme: 'Colors'
+  },
   editor: {
     linkText: 'link text',
     placeholder: 'Start writing…'
@@ -556,6 +568,12 @@ const zhTW = {
   app: {
     untitled: '未命名',
     document: 'BiuText 文件'
+  },
+  exportPreview: {
+    title: '匯出預覽',
+    hint: '這裡看到的就是即將匯出的版面。',
+    preparing: '正在準備預覽…',
+    theme: '配色'
   },
   editor: {
     linkText: '連結文字',

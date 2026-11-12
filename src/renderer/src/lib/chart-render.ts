@@ -50,8 +50,8 @@ export async function renderChartDiagram(
 
   const canvas = document.createElement('canvas')
   if (rasterize) {
-    canvas.width = 960
-    canvas.height = parsed.config.type === 'pie' || parsed.config.type === 'radar' ? 640 : 480
+    canvas.width = 1440
+    canvas.height = parsed.config.type === 'pie' || parsed.config.type === 'radar' ? 1080 : 810
   }
   const wrap = document.createElement('div')
   wrap.className = 'biu-diagram-chart'

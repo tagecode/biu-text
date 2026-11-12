@@ -1,12 +1,15 @@
 import { app, shell, BrowserWindow, ipcMain, Menu, dialog, nativeTheme, protocol } from 'electron'
 import { join, basename, extname, dirname, isAbsolute } from 'path'
-import { mkdir, readdir, readFile, writeFile, realpath } from 'fs/promises'
+import { mkdir, readdir, readFile, writeFile, realpath, unlink } from 'fs/promises'
+import { tmpdir } from 'os'
+import { randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-channels'
 import { IMAGE_SCHEME } from '../shared/image-url'
 import { imageContentType, isInsideDirectory, resolveImageRequest } from './image-path'
 import { imageFileName } from './image-save'
 import { inlineLocalImages } from './export-image'
+import { writePdfDocument } from './export-pdf'
 import { loadImageHostConfig, saveImageHostConfig } from './image-host-store'
 import { testImageHost, uploadImage } from './image-host-providers'
 import {
@@ -23,6 +26,13 @@ import { resolveLanguage } from '../shared/i18n/resolve-language'
 import { translate } from '../shared/i18n/translate'
 import type { AppLanguage } from '../shared/i18n/types'
 import { readRecentFiles, recordRecentFileList, type RecentFileRecord } from '../shared/recent-files'
+
+// 端到端测试使用独立用户目录，并允许窗口直接关掉，避免写到本机配置或卡在未保存确认。
+const e2eUserData = process.env.BIU_TEXT_E2E === '1' ? process.env.BIU_TEXT_USER_DATA : undefined
+if (e2eUserData) {
+  app.setPath('userData', e2eUserData)
+  if (process.platform === 'linux') app.commandLine.appendSwitch('no-sandbox')
+}
 
 let mainWindow: BrowserWindow | null = null
 let isReadyToClose = false
@@ -174,6 +184,7 @@ function createWindow(): void {
 
   // 拦截窗口关闭，询问渲染进程是否有未保存内容
   mainWindow.on('close', (e) => {
+    if (process.env.BIU_TEXT_E2E === '1') return
     if (!isReadyToClose) {
       e.preventDefault()
       mainWindow!.webContents.send(IPC.APP_WILL_CLOSE)
@@ -434,32 +445,46 @@ ipcMain.handle(
     })
     if (canceled || !filePath) return null
 
-    // 打印窗口加载的是 data: URL，相对图片没有基准目录，先内联成 data URI
+    // 打印窗口没有文档目录，相对图片先内联成 data URI，再落到临时文件，避免 data URL 把大图截断
     const printable = await inlineLocalImages(html, documentDirectory(documentPath) ?? imageBaseDir)
-
-    let pdfWindow: BrowserWindow | null = null
+    const tempPath = join(tmpdir(), `biu-text-${randomUUID()}.html`)
     try {
-      pdfWindow = new BrowserWindow({
-        show: false,
-        webPreferences: {
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false
+      await writePdfDocument(printable, filePath, tempPath, {
+        writeFile: (path, data) =>
+          typeof data === 'string' ? writeFile(path, data, 'utf-8') : writeFile(path, data),
+        remove: (path) => unlink(path),
+        open: async (path) => {
+          const pdfWindow = new BrowserWindow({
+            show: false,
+            width: 900,
+            height: 1200,
+            webPreferences: {
+              sandbox: true,
+              contextIsolation: true,
+              nodeIntegration: false,
+              backgroundThrottling: false
+            }
+          })
+          try {
+            await pdfWindow.loadFile(path)
+          } catch (error) {
+            if (!pdfWindow.isDestroyed()) pdfWindow.destroy()
+            throw error
+          }
+          return {
+            executeJavaScript: (script) => pdfWindow.webContents.executeJavaScript(script),
+            printToPDF: (options) => pdfWindow.webContents.printToPDF(options),
+            destroy: () => {
+              if (!pdfWindow.isDestroyed()) pdfWindow.destroy()
+            }
+          }
         }
       })
-      await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(printable)}`)
-      const pdfData = await pdfWindow.webContents.printToPDF({
-        printBackground: true,
-        preferCSSPageSize: true
-      })
-      await writeFile(filePath, pdfData)
       notify('success', t('notify.exported', { name: basename(filePath) }))
       return { path: filePath }
     } catch (err) {
       notify('error', t('dialog.exportPdfFailed'), String(err))
       return null
-    } finally {
-      pdfWindow?.destroy()
     }
   }
 )

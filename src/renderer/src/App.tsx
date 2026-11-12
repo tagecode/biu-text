@@ -20,7 +20,7 @@ import { useWordCount } from '@/hooks/useWordCount'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useImageHost } from '@/hooks/useImageHost'
 import { useImageUpload } from '@/hooks/useImageUpload'
-import { buildExportHtmlDocument } from '@/lib/export-document'
+import { ExportPreview, type ExportIntent } from '@/components/ExportPreview'
 import { insertImageLinks } from '@/lib/image-insert'
 import { insertBlock } from '@/lib/block-insert'
 import { MERMAID_SNIPPET } from '@shared/diagram'
@@ -136,6 +136,7 @@ function App() {
   const [leftPercent, setLeftPercent] = useState(readStoredLeftPct)
   const [previewVisible, setPreviewVisible] = useState(readStoredPreviewVisible)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [exportIntent, setExportIntent] = useState<ExportIntent | null>(null)
   const [cursorLine, setCursorLine] = useState(1)
   const [cursorCol, setCursorCol] = useState(1)
 
@@ -230,29 +231,13 @@ function App() {
     return normalized.split('/').pop() ?? t('app.document')
   }, [filePath, t])
 
-  const handleExportHtml = useCallback(async () => {
-    const html = await buildExportHtmlDocument({
-      title: getExportTitle(),
-      content,
-      theme,
-      previewTheme,
-      previewFontFamily,
-      fontSize
-    })
-    await exportHtml(html)
-  }, [content, theme, previewTheme, previewFontFamily, fontSize, getExportTitle, exportHtml])
+  const handleExportHtml = useCallback(() => {
+    setExportIntent('html')
+  }, [])
 
-  const handleExportPdf = useCallback(async () => {
-    const html = await buildExportHtmlDocument({
-      title: getExportTitle(),
-      content,
-      theme,
-      previewTheme,
-      previewFontFamily,
-      fontSize
-    })
-    await exportPdf(html)
-  }, [content, theme, previewTheme, previewFontFamily, fontSize, getExportTitle, exportPdf])
+  const handleExportPdf = useCallback(() => {
+    setExportIntent('pdf')
+  }, [])
 
   useEffect(() => {
     const unsubExportHtml = window.fileAPI.onMenuExportHtml(() => {
@@ -379,6 +364,20 @@ function App() {
           onOpenAtLoginChange={(value) => {
             void setOpenAtLogin(value)
           }}
+        />
+        <ExportPreview
+          open={exportIntent !== null}
+          intent={exportIntent ?? 'html'}
+          content={content}
+          documentPath={filePath}
+          title={getExportTitle()}
+          theme={theme}
+          previewTheme={previewTheme}
+          previewFontFamily={previewFontFamily}
+          fontSize={fontSize}
+          onClose={() => setExportIntent(null)}
+          onExportHtml={exportHtml}
+          onExportPdf={exportPdf}
         />
         <Toaster />
         <UploadIndicator />

@@ -130,7 +130,7 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 | 消毒 | DOMPurify | `^3.3.2` | 预览与导出共用的信任边界 |
 | 预览样式 | github-markdown-css | `^5.9.0` | 预置 GitHub 主题，Notion 为主题覆盖 |
 | 国际化 | i18next + react-i18next | `^26.7.1` / `^17.1.12` | 渲染进程；主进程另用纯函数（§11） |
-| 测试 | Vitest | `^5.1.0` | 只覆盖纯逻辑：`shared/`、`main/` 纯函数、`renderer/src/lib/` 纯模块 |
+| 测试 | Vitest + jsdom、Playwright | `^5.1.0` | 纯逻辑与 jsdom 组件测试；Playwright 启动 Electron 做桌面端到端 |
 | 打包 | electron-builder | `^26.8.1` | dmg / nsis / AppImage / deb |
 
 ### 3.2 规划依赖（尚未引入）
@@ -741,10 +741,9 @@ Editor 的 paste 捕获 / drop / 工具栏「插入图片」
 ```text
 渲染进程 buildExportHtmlDocument() → fileAPI.exportPdf(html, name, documentPath)
   └─ 主进程：保存对话框 → inlineLocalImages(html, 文档目录)  相对图片 → data: URI
-       └─ 新建隐藏 BrowserWindow({ show:false, sandbox:true, contextIsolation:true, nodeIntegration:false })
-       └─ loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
-       └─ webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
-       └─ writeFile(pdf) → notify('success', …) → finally: pdfWindow.destroy()
+       └─ 新建隐藏 BrowserWindow({ show:false, sandbox:true, backgroundThrottling:false })
+       └─ 写入临时 HTML 后 loadFile，等图片 load/error 再 printToPDF({ printBackground: true, preferCSSPageSize: true, scale: 1 })
+       └─ writeFile(pdf) → notify('success', …) → finally: 销毁窗口并删除临时文件
 ```
 
 > 打印窗口不加载 preload，也不具备任何 IPC 能力，仅用于排版与打印，是当前隔离度最高的窗口。
@@ -973,7 +972,7 @@ renderer: root: src/renderer, input: index.html,
 | `tsconfig.node.json` | main、preload、shared、electron.vite.config.ts | ESNext（无 DOM） | `@main/*`、`@preload/*` 路径别名 |
 | `tsconfig.web.json` | renderer、shared、preload/index.d.ts | ESNext + DOM | `@renderer/*`、`@*`、`@shared/*` 别名 |
 
-两份配置均排除 `*.test.ts`，`strict: true`，`noEmit: true`。`npm run typecheck` 依次执行两份检查。
+两份配置均排除 `*.test.ts` 与 `*.test.tsx`，`strict: true`，`noEmit: true`。`npm run typecheck` 依次执行两份检查。
 
 ### 15.3 代码质量工具
 
@@ -981,17 +980,18 @@ renderer: root: src/renderer, input: index.html,
 |------|------|------|
 | ESLint（flat config） | `npm run lint` | `**/*.{ts,tsx}`，js/ts recommended + react-hooks + react-refresh |
 | TypeScript | `npm run typecheck` | 主/渲染两套 |
-| Vitest | `npm test` | 纯函数与纯模块：i18n、editor-preferences、recent-files、search-phrases、diagram、image-url、image-path、image-save、export-image、toast-store |
+| Vitest | `npm test` | 纯函数与纯模块，以及 jsdom 下的图表渲染、Graphviz、导出 HTML、PDF 打印步骤、导出预览对话框 |
+| Playwright | `npm run test:e2e` | 启动打包后的 Electron：预览图表与 Graphviz、导出预览、写出 HTML 与 PDF |
 | i18n 校验 | `npm run check:i18n` | 三语 key 对齐 |
 
-**测试策略**：只测纯逻辑（`shared/`、主进程的纯函数、渲染层的纯模块），不测 UI 与 Electron 集成；无 E2E。这与"逻辑下沉到 shared"的架构原则互为因果——把可测逻辑挤出组件，降低测试成本。`vitest.config.ts` 因此配置了 `@` / `@shared` / `@renderer` 别名，让渲染层纯模块也能直接引入。
+**测试策略**：纯逻辑仍是主体（`shared/`、主进程纯函数、渲染层纯模块）。图表渲染、导出 HTML 组装、PDF 打印步骤，以及导出预览对话框和工具栏打开预览，放在 Vitest 的 jsdom 环境里测。桌面端到端用 Playwright 启动 `out/main/index.js`，覆盖真实窗口里的图表预览和 HTML/PDF 导出；`BIU_TEXT_E2E=1` 时主进程改用 `BIU_TEXT_USER_DATA` 指向的用户目录，并允许窗口直接关闭。`vitest.config.ts` 配置了 `@` / `@shared` / `@renderer` 别名；组件测试文件使用 `*.test.tsx`，并在文件头声明 `@vitest-environment jsdom`。
 
 ### 15.4 持续集成与发布
 
 **`.github/workflows/ci.yml`（质量门禁）**：
 
 - 触发：任意分支 `push`、`pull_request`，以及被 `release.yml` 通过 `workflow_call` 复用。
-- 单 job（`ubuntu-latest`，Node 24）顺序执行：`npm ci` → `lint` → `typecheck` → `test` → `check:i18n` → `build`。
+- 单 job（`ubuntu-latest`，Node 24）顺序执行：`npm ci` → `lint` → `typecheck` → `test` → `check:i18n` → `build` → `xvfb-run npx playwright test`。
 - 用固定 registry 与 Electron 镜像地址，避免 runner 地域差异导致的下载失败。
 - `permissions: contents: read`，最小权限。
 
@@ -1078,7 +1078,7 @@ renderMarkdown(content, { diagrams })        // 保持同步、纯函数
 - 导出 HTML/PDF 前完成水合。Mermaid 以**内联 SVG** 进入导出文件，ChartJS 以 PNG 进入。
 - 主题切换按主题分键，天然不会串色。
 
-**后续（v1.0）**：导出预览模式还没做。编辑区内联仍只覆盖图片和 Mermaid。
+**后续（v1.0）**：自定义模板和批量导出还没做。编辑区内联仍只覆盖图片和 Mermaid。
 
 ### 16.2 图片上传子系统
 
@@ -1173,7 +1173,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 |------|------|-----------|----------|
 | v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、工具栏「插入 Mermaid」（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts`（`MERMAID_SNIPPET`）+ `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`block-insert.ts`（块插入）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
 | v0.5 | 云图床（✅ GitHub + 自定义 HTTP 已落地）、上传占位符与重试（✅）、进度条（✅）、测试连接（✅）、批量上传（✅ 多选/多文件粘贴）、其余厂商图床（未做） | `shared/image-host.ts`、`main/image-host-store.ts`、`main/http-upload.ts`、`main/image-host-providers.ts`、`IMAGE_HOST_*` / `IMAGE_UPLOAD` / `IMAGE_UPLOAD_PROGRESS` 通道、`useImageHost` / `useImageUpload` / `upload-placeholder` / `upload-store`、`SettingsPanel/ImageHostSettings`、`UploadIndicator`、Toast 动作按钮 | 凭证安全（已用 `safeStorage`，明文降级见 §13.3）、网络失败语义（已定：保留占位符 + 重试）、进度串扰（已用 `uploadId` 隔离） |
-| v1.0 | 内联渲染（✅ v0.6）、ChartJS 预览与导出（✅）、Graphviz 预览与导出（✅）、导出预览模式（未做） | CodeMirror ViewPlugin、`diagramRenderers`、导出管线 | 编辑体验回归、性能、缓存一致性 |
+| v1.0 | 内联渲染（✅ v0.6）、ChartJS 预览与导出（✅）、Graphviz 预览与导出（✅）、导出前预览（✅）、自定义模板与批量导出（未做） | CodeMirror ViewPlugin、`diagramRenderers`、导出管线 | 编辑体验回归、性能、缓存一致性 |
 | v1.1 | 多标签、文件树、Excalidraw | 文档模型重构、侧边栏布局、独立编辑窗口 | 单文档假设、状态迁移 |
 
 ---
