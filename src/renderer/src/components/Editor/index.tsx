@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, MutableRefObject } from 'react'
 import type { ClipboardEvent, DragEvent } from 'react'
 import i18n from '@/i18n'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
@@ -19,6 +19,8 @@ import type { EditorFontFamily } from '@/hooks/useAppearanceSettings'
 import type { Theme } from '@/hooks/useTheme'
 
 interface EditorProps {
+  /** 每个标签一个编辑器实例，用文档 id 区分 */
+  documentId: string
   content: string
   theme: Theme
   fontFamily: EditorFontFamily
@@ -28,12 +30,16 @@ interface EditorProps {
   showLineNumbers: boolean
   inlineRender: boolean
   documentPath: string | null
-  editorViewRef: MutableRefObject<EditorView | null>
   previewScrollRef: MutableRefObject<HTMLDivElement | null>
   onChange: (value: string) => void
   onCursorChange?: (line: number, col: number) => void
+  /** 滚动位置回传：标签切走时 display:none 会丢掉 scrollTop，上层据此恢复 */
+  onScroll?: (scrollTop: number) => void
   /** 把图片字节交给主进程落盘，返回可写进 Markdown 的相对路径 */
   onImageFiles?: (files: ImageFileInput[]) => Promise<string[]>
+  /** 编辑器实例就绪/销毁时通知上层，供工具栏与菜单动作定位到活动标签 */
+  onViewReady?: (documentId: string, view: EditorView) => void
+  onViewDestroy?: (documentId: string) => void
 }
 
 const IMAGE_NAME = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i
@@ -84,6 +90,7 @@ function insertLink(view: EditorView, linkText: string) {
 }
 
 export function Editor({
+  documentId,
   content,
   theme,
   fontFamily,
@@ -93,13 +100,21 @@ export function Editor({
   showLineNumbers,
   inlineRender,
   documentPath,
-  editorViewRef,
   previewScrollRef,
   onChange,
   onCursorChange,
-  onImageFiles
+  onScroll,
+  onImageFiles,
+  onViewReady,
+  onViewDestroy
 }: EditorProps) {
   const scrollSyncActive = useRef(false)
+  const viewRef = useRef<EditorView | null>(null)
+  // 滚动监听在创建时注册一次，用 ref 拿最新的回调，避免闭包里的旧函数
+  const onScrollRef = useRef(onScroll)
+  useEffect(() => {
+    onScrollRef.current = onScroll
+  }, [onScroll])
   const [dragActive, setDragActive] = useState(false)
 
   const language = resolveLanguage(i18n.language, i18n.language)
@@ -160,14 +175,16 @@ export function Editor({
 
   const handleCreateEditor = useCallback(
     (view: EditorView) => {
-      editorViewRef.current = view
+      viewRef.current = view
+      onViewReady?.(documentId, view)
 
       // 滚动同步：编辑区滚动 → 预览区同步
       view.scrollDOM.addEventListener('scroll', () => {
+        const { scrollTop, scrollHeight, clientHeight } = view.scrollDOM
+        onScrollRef.current?.(scrollTop)
         if (scrollSyncActive.current) return
         const preview = previewScrollRef.current
         if (!preview) return
-        const { scrollTop, scrollHeight, clientHeight } = view.scrollDOM
         const maxScroll = scrollHeight - clientHeight
         if (maxScroll <= 0) return
         const pct = scrollTop / maxScroll
@@ -178,17 +195,25 @@ export function Editor({
         })
       })
     },
-    [editorViewRef, previewScrollRef]
+    [documentId, onViewReady, previewScrollRef]
   )
+
+  // 标签关掉后把实例从上层登记表里摘掉，避免 ref 指向已卸载的编辑器
+  useEffect(() => {
+    return () => {
+      viewRef.current = null
+      onViewDestroy?.(documentId)
+    }
+  }, [documentId, onViewDestroy])
 
   const insertImages = useCallback(
     async (files: File[]) => {
       if (files.length === 0 || !onImageFiles) return
       const paths = await onImageFiles(await toImageInputs(files))
-      const view = editorViewRef.current
+      const view = viewRef.current
       if (view && paths.length > 0) insertImageLinks(view, paths)
     },
-    [onImageFiles, editorViewRef]
+    [onImageFiles]
   )
 
   const handlePaste = useCallback(

@@ -11,6 +11,7 @@ const zhCN = {
     file: '文件',
     new: '新建',
     open: '打开…',
+    openFolder: '打开文件夹…',
     recentFiles: '最近文件',
     noRecentFiles: '暂无最近文件',
     save: '保存',
@@ -71,6 +72,7 @@ const zhCN = {
     link: '插入链接',
     insertImage: '插入图片',
     insertDiagram: '插入 Mermaid',
+    insertDrawing: '插入手绘图',
     wordSummary: '{{words}} 词 · {{chars}} 字符'
   },
   settings: {
@@ -121,6 +123,38 @@ const zhCN = {
     untitled: '未命名',
     document: 'BiuText 文档'
   },
+  tabs: {
+    list: '打开的文档',
+    new: '新建标签页',
+    close: '关闭标签页 {{name}}',
+    unsaved: '未保存'
+  },
+  workspace: {
+    title: '文件',
+    openFolder: '打开文件夹',
+    openFolderHint: '选择一个文件夹，在这里浏览其中的 Markdown 文件',
+    empty: '还没有打开文件夹',
+    refresh: '刷新',
+    closeFolder: '关闭文件夹',
+    showSidebar: '显示文件树',
+    hideSidebar: '隐藏文件树',
+    rename: '重命名…',
+    renameTitle: '重命名「{{name}}」',
+    renameLabel: '新名称',
+    renameConfirm: '重命名',
+    renameFailed: '重命名失败',
+    renameInvalid: '名称不能为空，也不能包含路径分隔符',
+    renameExists: '同名文件已存在',
+    delete: '删除',
+    deleteFailed: '删除失败',
+    deleteSucceeded: '已把「{{name}}」移到回收站',
+    confirmDeleteTitle: '删除文件',
+    confirmDeleteMessage: '确定把「{{name}}」移到回收站吗？',
+    confirmDeleteDirty: '「{{name}}」还有未保存的修改，删除后这些修改会一起丢失。',
+    cancel: '取消',
+    closeDialog: '关闭',
+    skipped: '已忽略 {{count}} 个非 Markdown 条目'
+  },
   exportPreview: {
     title: '导出预览',
     hint: '这里看到的就是将要导出的版面。',
@@ -138,6 +172,17 @@ const zhCN = {
     missingData: '图表数据不完整',
     showSource: '源码',
     showPreview: '预览'
+  },
+  excalidraw: {
+    title: '插入手绘图',
+    hint: '画完点「插入」，会写成一个 excalidraw 代码块，之后还能再编辑',
+    insert: '插入',
+    cancel: '取消',
+    close: '关闭手绘图编辑器',
+    loading: '正在加载手绘编辑器…',
+    empty: '画布还是空的',
+    emptyScene: '手绘场景是空的',
+    missingScene: '手绘场景缺少 elements 字段'
   },
   notify: {
     exported: '已导出 {{name}}',
@@ -235,6 +280,7 @@ const enUS = {
     file: 'File',
     new: 'New',
     open: 'Open…',
+    openFolder: 'Open Folder…',
     recentFiles: 'Recent Files',
     noRecentFiles: 'No Recent Files',
     save: 'Save',
@@ -295,6 +341,7 @@ const enUS = {
     link: 'Insert Link',
     insertImage: 'Insert Image',
     insertDiagram: 'Insert Mermaid Diagram',
+    insertDrawing: 'Insert Drawing',
     wordSummary: '{{words}} words · {{chars}} characters'
   },
   settings: {
@@ -345,6 +392,38 @@ const enUS = {
     untitled: 'Untitled',
     document: 'BiuText Document'
   },
+  tabs: {
+    list: 'Open documents',
+    new: 'New tab',
+    close: 'Close tab {{name}}',
+    unsaved: 'Unsaved'
+  },
+  workspace: {
+    title: 'Files',
+    openFolder: 'Open folder',
+    openFolderHint: 'Pick a folder to browse its Markdown files here',
+    empty: 'No folder opened yet',
+    refresh: 'Refresh',
+    closeFolder: 'Close folder',
+    showSidebar: 'Show file tree',
+    hideSidebar: 'Hide file tree',
+    rename: 'Rename…',
+    renameTitle: 'Rename “{{name}}”',
+    renameLabel: 'New name',
+    renameConfirm: 'Rename',
+    renameFailed: 'Rename failed',
+    renameInvalid: 'Name cannot be empty or contain path separators',
+    renameExists: 'A file with that name already exists',
+    delete: 'Delete',
+    deleteFailed: 'Delete failed',
+    deleteSucceeded: 'Moved “{{name}}” to the trash',
+    confirmDeleteTitle: 'Delete file',
+    confirmDeleteMessage: 'Move “{{name}}” to the trash?',
+    confirmDeleteDirty: '“{{name}}” has unsaved changes; deleting it will discard them.',
+    cancel: 'Cancel',
+    closeDialog: 'Close',
+    skipped: '{{count}} non-Markdown entries ignored'
+  },
   exportPreview: {
     title: 'Export preview',
     hint: 'This is the page that will be exported.',
@@ -362,6 +441,17 @@ const enUS = {
     missingData: 'Chart data is incomplete',
     showSource: 'Source',
     showPreview: 'Preview'
+  },
+  excalidraw: {
+    title: 'Insert drawing',
+    hint: 'When you are done, click Insert — it becomes an excalidraw code block you can edit again',
+    insert: 'Insert',
+    cancel: 'Cancel',
+    close: 'Close drawing editor',
+    loading: 'Loading drawing editor…',
+    empty: 'Canvas is still empty',
+    emptyScene: 'The drawing scene is empty',
+    missingScene: 'The drawing scene has no elements field'
   },
   notify: {
     exported: 'Exported {{name}}',
@@ -459,6 +549,7 @@ const zhTW = {
     file: '檔案',
     new: '新增',
     open: '開啟…',
+    openFolder: '開啟資料夾…',
     recentFiles: '最近使用的檔案',
     noRecentFiles: '沒有最近使用的檔案',
     save: '儲存',
@@ -519,6 +610,7 @@ const zhTW = {
     link: '插入連結',
     insertImage: '插入圖片',
     insertDiagram: '插入 Mermaid',
+    insertDrawing: '插入手繪圖',
     wordSummary: '{{words}} 個詞 · {{chars}} 個字元'
   },
   settings: {
@@ -569,6 +661,38 @@ const zhTW = {
     untitled: '未命名',
     document: 'BiuText 文件'
   },
+  tabs: {
+    list: '開啟的文件',
+    new: '新增標籤頁',
+    close: '關閉標籤頁 {{name}}',
+    unsaved: '未儲存'
+  },
+  workspace: {
+    title: '檔案',
+    openFolder: '開啟資料夾',
+    openFolderHint: '選擇一個資料夾，在這裡瀏覽其中的 Markdown 檔案',
+    empty: '還沒有開啟資料夾',
+    refresh: '重新整理',
+    closeFolder: '關閉資料夾',
+    showSidebar: '顯示檔案樹',
+    hideSidebar: '隱藏檔案樹',
+    rename: '重新命名…',
+    renameTitle: '重新命名「{{name}}」',
+    renameLabel: '新名稱',
+    renameConfirm: '重新命名',
+    renameFailed: '重新命名失敗',
+    renameInvalid: '名稱不能為空，也不能包含路徑分隔符號',
+    renameExists: '同名檔案已存在',
+    delete: '刪除',
+    deleteFailed: '刪除失敗',
+    deleteSucceeded: '已把「{{name}}」移到資源回收筒',
+    confirmDeleteTitle: '刪除檔案',
+    confirmDeleteMessage: '確定把「{{name}}」移到資源回收筒嗎？',
+    confirmDeleteDirty: '「{{name}}」還有未儲存的修改，刪除後這些修改會一起遺失。',
+    cancel: '取消',
+    closeDialog: '關閉',
+    skipped: '已忽略 {{count}} 個非 Markdown 項目'
+  },
   exportPreview: {
     title: '匯出預覽',
     hint: '這裡看到的就是即將匯出的版面。',
@@ -586,6 +710,17 @@ const zhTW = {
     missingData: '圖表資料不完整',
     showSource: '原始碼',
     showPreview: '預覽'
+  },
+  excalidraw: {
+    title: '插入手繪圖',
+    hint: '畫完點「插入」，會寫成一個 excalidraw 程式碼區塊，之後還能再編輯',
+    insert: '插入',
+    cancel: '取消',
+    close: '關閉手繪圖編輯器',
+    loading: '正在載入手繪圖編輯器…',
+    empty: '畫布還是空的',
+    emptyScene: '手繪場景是空的',
+    missingScene: '手繪場景缺少 elements 欄位'
   },
   notify: {
     exported: '已匯出 {{name}}',

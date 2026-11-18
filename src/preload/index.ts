@@ -4,6 +4,11 @@ import type { AppLanguage } from '../shared/i18n/types'
 import type { ImageFileInput } from '../shared/image-input'
 import type { NotificationPayload } from '../shared/notification'
 import type {
+  WorkspaceDeleteResult,
+  WorkspaceRenameResult,
+  WorkspaceSnapshot
+} from '../shared/workspace'
+import type {
   ImageHostConfigView,
   ImageHostTestResult,
   ImageUploadProgress,
@@ -48,6 +53,12 @@ const fileAPI = {
     const handler = (_: Electron.IpcRendererEvent, path: string) => cb(path)
     ipcRenderer.on(IPC.MENU_OPEN_RECENT, handler)
     return () => ipcRenderer.removeListener(IPC.MENU_OPEN_RECENT, handler)
+  },
+
+  onMenuOpenFolder: (cb: () => void): UnsubFn => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.MENU_OPEN_FOLDER, handler)
+    return () => ipcRenderer.removeListener(IPC.MENU_OPEN_FOLDER, handler)
   },
 
   onMenuSave: (cb: () => void): UnsubFn => {
@@ -144,6 +155,22 @@ const imageAPI = {
   }
 }
 
+const workspaceAPI = {
+  /** 弹系统目录选择框并读取文件树；用户取消返回 null */
+  openFolder: (): Promise<WorkspaceSnapshot | null> => ipcRenderer.invoke(IPC.WORKSPACE_OPEN),
+
+  /** 重新读取已知根目录（刷新按钮与操作后刷新都走它） */
+  load: (root: string): Promise<WorkspaceSnapshot | null> =>
+    ipcRenderer.invoke(IPC.WORKSPACE_LOAD, { root }),
+
+  rename: (root: string, path: string, name: string): Promise<WorkspaceRenameResult> =>
+    ipcRenderer.invoke(IPC.WORKSPACE_RENAME, { root, path, name }),
+
+  /** 删除由主进程弹原生确认框并移到回收站 */
+  remove: (root: string, path: string, dirty: boolean): Promise<WorkspaceDeleteResult> =>
+    ipcRenderer.invoke(IPC.WORKSPACE_DELETE, { root, path, dirty })
+}
+
 const windowAPI = {
   platform: process.platform,
 
@@ -183,6 +210,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('languageAPI', languageAPI)
     contextBridge.exposeInMainWorld('loginAPI', loginAPI)
     contextBridge.exposeInMainWorld('imageAPI', imageAPI)
+    contextBridge.exposeInMainWorld('workspaceAPI', workspaceAPI)
   } catch (error) {
     console.error(error)
   }
@@ -199,4 +227,6 @@ if (process.contextIsolated) {
   window.loginAPI = loginAPI
   // @ts-expect-error preload 的 Node 类型环境没有 DOM window
   window.imageAPI = imageAPI
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
+  window.workspaceAPI = workspaceAPI
 }

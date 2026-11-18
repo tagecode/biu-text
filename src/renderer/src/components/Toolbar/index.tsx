@@ -7,13 +7,15 @@ import {
   FileText,
   PanelRightOpen,
   PanelRightClose,
+  PanelLeft,
   Settings,
   Bold,
   Italic,
   Code,
   Link,
   ImagePlus,
-  Workflow
+  Workflow,
+  PenTool
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -32,12 +34,15 @@ interface ToolbarProps {
   onExportPdf: () => void
   previewVisible: boolean
   onTogglePreviewVisible: () => void
+  sidebarVisible: boolean
+  onToggleSidebar: () => void
   onBold: () => void
   onItalic: () => void
   onCode: () => void
   onLink: () => void
   onInsertImage: () => void
   onInsertDiagram: () => void
+  onInsertDrawing: () => void
   onOpenSettings: () => void
   wordCount: WordCountResult
 }
@@ -54,12 +59,15 @@ export function Toolbar({
   onExportPdf,
   previewVisible,
   onTogglePreviewVisible,
+  sidebarVisible,
+  onToggleSidebar,
   onBold,
   onItalic,
   onCode,
   onLink,
   onInsertImage,
   onInsertDiagram,
+  onInsertDrawing,
   onOpenSettings,
   wordCount
 }: ToolbarProps) {
@@ -90,6 +98,12 @@ export function Toolbar({
       </ToolbarButton>
       <ToolbarButton label={t('toolbar.exportPdf')} hint={shortcut('P', true)} onClick={onExportPdf}>
         <Download className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        label={sidebarVisible ? t('workspace.hideSidebar') : t('workspace.showSidebar')}
+        onClick={onToggleSidebar}
+      >
+        <PanelLeft className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton label={previewLabel} onClick={onTogglePreviewVisible}>
         {previewVisible ? <PanelRightClose className="size-3.5" /> : <PanelRightOpen className="size-3.5" />}
@@ -122,6 +136,9 @@ export function Toolbar({
       </ToolbarButton>
       <ToolbarButton label={t('toolbar.insertDiagram')} onClick={onInsertDiagram}>
         <Workflow className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton label={t('toolbar.insertDrawing')} onClick={onInsertDrawing}>
+        <PenTool className="size-3.5" />
       </ToolbarButton>
 
       {/* 右侧：字数统计摘要 */}

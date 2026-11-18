@@ -16,6 +16,7 @@ export interface AppMenuItem {
 export interface AppMenuActions {
   newFile: () => void
   openFile: () => void
+  openFolder: () => void
   openRecent: (path: string) => void
   save: () => void
   saveAs: () => void
@@ -83,6 +84,7 @@ export function createAppMenuTemplate(options: AppMenuTemplateOptions): AppMenuI
       submenu: [
         { label: t('menu.new'), accelerator: 'CmdOrCtrl+N', click: actions.newFile },
         { label: t('menu.open'), accelerator: 'CmdOrCtrl+O', click: actions.openFile },
+        { label: t('menu.openFolder'), accelerator: 'CmdOrCtrl+Shift+O', click: actions.openFolder },
         { label: t('menu.recentFiles'), submenu: recentSubmenu },
         { type: 'separator' },
         { label: t('menu.save'), accelerator: 'CmdOrCtrl+S', click: actions.save },

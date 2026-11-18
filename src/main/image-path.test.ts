@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { join, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { imageContentType, isInsideDirectory, resolveImageRequest } from './image-path'
 
-const DOC_DIR = join(sep, 'docs')
+// 必须是绝对路径：Windows 上 `join(sep, 'docs')` 得到的是 `\docs`，
+// 而实现内部用 `resolve` 会补全盘符，两者字符串形态对不上
+const DOC_DIR = resolve(sep, 'docs')
 
 describe('resolveImageRequest', () => {
   it('resolves relative paths inside the document directory', () => {

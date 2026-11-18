@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify'
 import { renderChartDiagram } from '@/lib/chart-render'
 import { renderGraphvizSvg } from '@/lib/graphviz-render'
+import { renderExcalidrawSvg } from '@/lib/excalidraw-render'
 import i18n from '@/i18n'
 import { diagramCacheKey, type DiagramBlock } from '@shared/diagram'
 import type { Theme } from '@/hooks/useTheme'
@@ -112,8 +113,11 @@ export interface HydrateDiagramsOptions {
 }
 
 /**
- * 把占位块水合为图表。跳过的判据只有 abort：内容变一次就整批重做，
- * 因为旧 DOM 可能已被 React 覆盖。渲染失败的块保留源码并显示错误信息。
+ * 把占位块水合为图表。
+ *
+ * 预览区按块增量更新 DOM，所以现在**按块**调用：只水合本次被重建的块，
+ * 其它块里已经画好的 SVG 原样留着。abort 用于块被替换/移除、
+ * 或主题与语言变化时取消在途渲染。
  */
 export async function hydrateDiagrams(
   root: ParentNode,
@@ -156,6 +160,11 @@ const diagramRenderers: Record<string, DiagramRenderer> = {
   chartjs: renderChartDiagram,
   dot: async (host, block, theme, signal) => {
     const svg = await renderGraphvizSvg(block, theme)
+    if (signal.aborted) return
+    mountSvg(host, svg)
+  },
+  excalidraw: async (host, block, theme, signal) => {
+    const svg = await renderExcalidrawSvg(block, theme)
     if (signal.aborted) return
     mountSvg(host, svg)
   }

@@ -8,6 +8,11 @@ import type {
   ImageUploadRequest,
   ImageUploadResult
 } from '../shared/image-host'
+import type {
+  WorkspaceDeleteResult,
+  WorkspaceRenameResult,
+  WorkspaceSnapshot
+} from '../shared/workspace'
 
 export {}
 
@@ -23,6 +28,7 @@ interface FileAPI {
   onMenuNew: (cb: () => void) => UnsubFn
   onMenuOpen: (cb: () => void) => UnsubFn
   onMenuOpenRecent: (cb: (path: string) => void) => UnsubFn
+  onMenuOpenFolder: (cb: () => void) => UnsubFn
   onMenuSave: (cb: () => void) => UnsubFn
   onMenuSaveAs: (cb: () => void) => UnsubFn
   onMenuExportHtml: (cb: () => void) => UnsubFn
@@ -69,6 +75,13 @@ interface ImageAPI {
   onUploadProgress: (cb: (progress: ImageUploadProgress) => void) => UnsubFn
 }
 
+interface WorkspaceAPI {
+  openFolder: () => Promise<WorkspaceSnapshot | null>
+  load: (root: string) => Promise<WorkspaceSnapshot | null>
+  rename: (root: string, path: string, name: string) => Promise<WorkspaceRenameResult>
+  remove: (root: string, path: string, dirty: boolean) => Promise<WorkspaceDeleteResult>
+}
+
 declare global {
   interface Window {
     fileAPI: FileAPI
@@ -77,5 +90,6 @@ declare global {
     languageAPI: LanguageAPI
     loginAPI: LoginAPI
     imageAPI: ImageAPI
+    workspaceAPI: WorkspaceAPI
   }
 }

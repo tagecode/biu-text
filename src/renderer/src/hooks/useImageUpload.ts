@@ -24,12 +24,12 @@ export function nextUploadId(): string {
 
 export interface UseImageUploadOptions {
   hostType: ImageHostType
-  /** 在光标处插入占位符，由调用方决定落到哪个编辑器 */
-  insertPlaceholders: (text: string) => void
-  /** 占位符回填：只改文档内容，不碰光标 */
-  updateContent: (updater: (prev: string) => string) => void
-  /** 重试前确认占位符还在文档里，用户删掉的就不要再传了 */
-  getContent: () => string
+  /** 在指定文档的光标处插入占位符，由调用方决定落到哪个编辑器 */
+  insertPlaceholders: (docId: string, text: string) => void
+  /** 占位符回填：只改指定文档的内容，不碰光标 */
+  updateContent: (docId: string, updater: (prev: string) => string) => void
+  /** 重试前确认占位符还在该文档里，用户删掉的就不要再传了 */
+  getContent: (docId: string) => string
 }
 
 export function useImageUpload({
@@ -40,12 +40,12 @@ export function useImageUpload({
 }: UseImageUploadOptions) {
   const { t } = useTranslation()
   // 「重试」要调回上传本身，用 ref 打破自引用
-  const retryRef = useRef<(id: string, file: ImageFileInput) => Promise<void>>(() =>
+  const retryRef = useRef<(id: string, file: ImageFileInput, docId: string) => Promise<void>>(() =>
     Promise.resolve()
   )
 
   const uploadOne = useCallback(
-    async (id: string, file: ImageFileInput) => {
+    async (id: string, file: ImageFileInput, docId: string) => {
       uploadStarted(id, file.name, file.bytes.byteLength)
       let result: ImageUploadResult
       try {
@@ -58,7 +58,7 @@ export function useImageUpload({
       }
 
       if (result.ok) {
-        updateContent((prev) =>
+        updateContent(docId, (prev) =>
           replacePlaceholder(prev, id, imageMarkdown(altFromName(file.name), result.url))
         )
         return
@@ -72,8 +72,8 @@ export function useImageUpload({
         action: {
           label: t('imageHost.retry'),
           onClick: () => {
-            if (!hasPlaceholder(getContent(), id)) return
-            void retryRef.current(id, file)
+            if (!hasPlaceholder(getContent(docId), id)) return
+            void retryRef.current(id, file, docId)
           }
         }
       })
@@ -87,12 +87,12 @@ export function useImageUpload({
 
   /** 先把占位符一次性插好，再并发上传；每张图独立成功/失败 */
   const startUpload = useCallback(
-    (files: ImageFileInput[]) => {
+    (docId: string, files: ImageFileInput[]) => {
       if (files.length === 0) return
       const ids = files.map(() => nextUploadId())
-      insertPlaceholders(ids.map(placeholderMarkdown).join('\n'))
+      insertPlaceholders(docId, ids.map(placeholderMarkdown).join('\n'))
       ids.forEach((id, index) => {
-        void uploadOne(id, files[index])
+        void uploadOne(id, files[index], docId)
       })
     },
     [insertPlaceholders, uploadOne]

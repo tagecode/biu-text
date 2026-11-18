@@ -21,7 +21,7 @@
 - **以代码为唯一事实来源**。本文所有"现状"描述均对应 v0.3.1 的实际代码；与 PRD 冲突时以代码为准，并回写 PRD。
 - 标注 `规划` 的内容为设计意图，尚未落地。
 - 文件路径均相对于仓库根目录。
-- 代码量为约 3.9k 行（`src/` 下 `.ts/.tsx`），单体应用规模，架构以**简洁、可测、可渐进扩展**为主，不引入超出需要的抽象。
+- 代码量为约 4.3k 行（`src/` 下 `.ts/.tsx`），单体应用规模，架构以**简洁、可测、可渐进扩展**为主，不引入超出需要的抽象。
 
 ### 1.3 术语
 
@@ -83,8 +83,8 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 │  │ Toolbar  │ Editor   │ Preview      │ StatusBar / SettingsPanel  │ │
 │  │          │ CodeMirror│ markdown-it + DOMPurify │                │ │
 │  └──────────┴──────────┴──────────────┴────────────────────────────┘ │
-│  hooks：useFile / useTheme / useAppearanceSettings / useLoginItem /   │
-│         useWordCount / useDebounce / useAppLanguage                   │
+│  hooks：useDocuments / useWorkspace / useTheme / useAppearanceSettings /   │
+│         useLoginItem / useWordCount / useDebounce / useAppLanguage        │
 └──────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -126,6 +126,7 @@ BiuText 是一款 Electron 桌面端 Markdown 编辑器，采用**左源码 / �
 | 图表 | mermaid | `^12.3.0` | 懒加载独立 chunk（约 1.1MB），仅首次遇到 Mermaid 时拉取；见 §8.8 |
 | 数据图表 | chart.js | `^4.6.1` | 懒加载，仅首次遇到 `chartjs` 块时拉取；见 §8.8 |
 | Graphviz | @viz-js/viz | `^3.31.0` | 懒加载，WASM 内嵌在模块里；`script-src` 需要 `wasm-unsafe-eval`；见 §8.8 |
+| 手绘图 | @excalidraw/excalidraw | `^0.18.1` | 懒加载（约 1.5MB），编辑器与 SVG 导出共用同一 chunk；仅在打开编辑器或文档含 `excalidraw` 块时下载；见 §8.8 |
 | 数学公式 | KaTeX（@traptitech 插件） | `^0.16.38` / `^3.6.0` | `$...$`、`$$...$$` |
 | 消毒 | DOMPurify | `^3.3.2` | 预览与导出共用的信任边界 |
 | 预览样式 | github-markdown-css | `^5.9.0` | 预置 GitHub 主题，Notion 为主题覆盖 |
@@ -213,6 +214,8 @@ app.on('window-all-closed') // 非 macOS 退出
 | 图片写入 | `IMAGE_SAVE`、`IMAGE_PICK`、`IMAGE_PICK_INPUT` | 渲染 → 主 | `invoke/handle` |
 | 云图床 | `IMAGE_HOST_GET`、`IMAGE_HOST_SET`、`IMAGE_HOST_TEST`、`IMAGE_UPLOAD` | 渲染 → 主 | `invoke/handle` |
 | 上传进度 | `IMAGE_UPLOAD_PROGRESS` | 主 → 渲染 | `webContents.send` |
+| 工作区 | `WORKSPACE_OPEN`、`WORKSPACE_LOAD`、`WORKSPACE_RENAME`、`WORKSPACE_DELETE` | 渲染 → 主 | `invoke/handle` |
+| 菜单触发（文件夹） | `MENU_OPEN_FOLDER` | 主 → 渲染 | `webContents.send` |
 | 主题 | `THEME_GET`、`THEME_SET`、`THEME_CHANGED` | 双向 | `invoke` / `send` / `send` |
 | 语言 | `LANGUAGE_GET`、`LANGUAGE_SET` | 渲染 → 主 | `sendSync` / `invoke` |
 | 开机自启 | `LOGIN_GET`、`LOGIN_SET` | 渲染 → 主 | `invoke` |
@@ -224,21 +227,21 @@ app.on('window-all-closed') // 非 macOS 退出
 #### 4.5.1 打开文件
 
 ```text
-渲染 useFile.openFile()
+渲染 useDocuments.openFile()
   └─ fileAPI.openDialog()                    [invoke FILE_OPEN_DIALOG]
        主进程 dialog.showOpenDialog(过滤器: md/markdown/txt, 所有文件)
        └─ readFile(utf-8)
        └─ recordRecentFile(path) → 写 recent-files.json → buildMenu()
        └─ 返回 { path, content }
-  └─ applyOpenedFile(): setContent / setFilePath / setSavedContent
-  └─ 标题更新：windowAPI.setTitle + document.title
+  └─ applyOpenedFile()：已打开过该路径 → 只激活既有标签；否则追加一个新 TabDocument
+  └─ 标题更新：windowAPI.setTitle + document.title（跟随活动标签）
 ```
 
 #### 4.5.2 保存与自动保存
 
-- `saveFile()`：无路径 → 走 `saveAs`；有路径 → `FILE_SAVE` 覆盖写，成功后更新 `savedContent`，脏标记自动清除。
-- `autoSave()`：由 `App` 中的 `setInterval` 按 `autoSaveSeconds` 触发；**仅在有路径且内容脏时写入**，无路径的新文档不会被自动保存。
-- 两者读取状态时使用 `stateRef`（而非闭包变量），确保定时器与 IPC 回调拿到最新值。
+- `saveDocument(docId?)`：无路径 → 走 `saveAs`；有路径 → `FILE_SAVE` 覆盖写，成功后把**写盘时的内容快照**记为 `savedContent`，脏标记自动清除。`docId` 省略时作用于活动标签；关标签、关窗口时会显式传入该标签自己的 id，避免把 A 的内容写进 B。
+- `autoSave()`：由 `App` 中的 `setInterval` 按 `autoSaveSeconds` 触发，遍历**所有**有路径且变脏的标签逐个写盘；无路径的新文档不会被自动保存。
+- 三者读取状态时使用 `stateRef`（而非闭包变量），确保定时器与 IPC 回调拿到最新值。
 
 #### 4.5.3 关闭握手（防丢稿）
 
@@ -246,18 +249,19 @@ app.on('window-all-closed') // 非 macOS 退出
 用户关闭窗口
   └─ main: BrowserWindow 'close' 事件
        if (!isReadyToClose) { e.preventDefault(); send(APP_WILL_CLOSE) }
-渲染 windowAPI.onWillClose → confirmLeaveCurrentDocument()
-  └─ 不脏 → confirmClose() → 主进程 isReadyToClose = true → close() → 正常退出
-  └─ 脏   → invoke APP_CONFIRM_DISCARD(文件名)
-              └─ main: dialog.showMessageBox({ 保存 / 不保存 / 取消 })
-                   ├─ 保存   → 渲染进程执行 saveFile()（无路径则先另存为）
-                   │            ├─ 写盘成功 → confirmClose()
-                   │            └─ 用户取消另存为 → cancelClose()（文档原样保留）
-                   ├─ 不保存 → confirmClose()
-                   └─ 取消   → cancelClose() → isReadyToClose = false
+渲染 windowAPI.onWillClose → confirmCloseAll()
+  └─ 遍历所有标签，逐个只看脏的：
+       invoke APP_CONFIRM_DISCARD(标签名)
+         └─ main: dialog.showMessageBox({ 保存 / 不保存 / 取消 })
+              ├─ 保存   → 对该标签执行 saveDocument(id)（无路径则先另存为）
+              │            ├─ 写盘成功 → 继续下一个脏标签
+              │            └─ 另存为被取消 → cancelClose()（整体中止）
+              ├─ 不保存 → 继续下一个脏标签
+              └─ 取消   → cancelClose() → isReadyToClose = false
+  └─ 全部通过 → confirmClose() → 主进程 isReadyToClose = true → close()
 ```
 
-同一个 `confirmLeaveCurrentDocument()` 也被**新建**与**打开**（含最近文件）复用：脏内容时先弹同一个三态对话框，选"取消"或"另存为"被取消都直接中止操作，不再静默覆盖内存中的草稿（§17 R10/R12）。
+多标签下**新建与打开不再需要脏检查**：它们只会新增标签，不会覆盖任何文档，草稿永远留在原标签里（§17 R12 的原始诉求仍成立）。脏检查只出现在「关标签」与「关窗口」两处，且关窗口时逐个标签确认。
 
 #### 4.5.4 主题同步
 
@@ -289,6 +293,7 @@ biu-text/
 │   ├── main/image-host-store.ts   # 图床配置读写（image-host.json），token 走 safeStorage
 │   ├── main/http-upload.ts        # 分块写入 + 背压的上传客户端（进度回调、超时）
 │   ├── main/image-host-providers.ts # GitHub Contents / 自定义 multipart 上传与连接测试
+│   ├── main/workspace.ts          # 文件树：目录遍历、重命名、移入回收站、根目录校验
 │   ├── preload/
 │   │   ├── index.ts               # contextBridge 门面
 │   │   └── index.d.ts             # window.* 全局类型声明
@@ -299,6 +304,9 @@ biu-text/
 │   │   ├── image-host.ts          # 图床配置类型、脱敏、header 文本互转、序列化、HTTPS 校验
 │   │   ├── notification.ts        # 主 → 渲染的轻量通知载荷类型（level/title/description）
 │   │   ├── diagram.ts             # 图表块结构 + 缓存键
+│   │   ├── excalidraw.ts          # 手绘场景：解析/校验、appState 压缩、生成代码块（纯函数）
+│   │   ├── documents.ts           # 多标签文档集合模型（脏标记/邻居标签/标签名，纯函数）
+│   │   ├── workspace.ts           # 文件树模型：类型、文件名校验、排序、查找（纯函数）
 │   │   ├── editor-preferences.ts  # Tab/行高/行号/自动保存的归一化
 │   │   ├── recent-files.ts        # 最近文件解析、去重、时间格式化
 │   │   ├── search-phrases.ts      # CodeMirror 查找面板文案
@@ -321,6 +329,9 @@ biu-text/
 │           │   ├── Editor/        # CodeMirror 封装
 │           │   ├── Preview/       # 渲染 + 消毒 + 链接处理
 │           │   ├── Toolbar/       # 文件/导出/格式化/设置
+│           │   ├── TabBar/        # 标签栏：标签名、脏标记、关闭/新建按钮
+│           │   ├── FileTree/      # 文件树：目录折叠、打开文件、右键重命名/删除
+│           │   ├── ExcalidrawEditor/ # 手绘对话框；Canvas.tsx 才真正引入 1.5MB 依赖
 │           │   ├── Splitter/      # Pointer Events 拖拽分隔条
 │           │   ├── StatusBar/     # 光标、字数、编码、语言、字号、主题
 │           │   ├── SettingsPanel/ # 设置弹层（外观/编辑器/图床；ImageHostSettings 为图床子表单）
@@ -328,8 +339,8 @@ biu-text/
 │           │   ├── UploadIndicator.tsx # 右下角上传进度卡（读 upload-store）
 │           │   └── ui/            # shadcn 基础组件
 │           ├── hooks/
-│           │   ├── useFile.ts           # 文档状态与文件操作
-│           │   ├── useTheme.ts          # 主题模式
+│           │   ├── useDocuments.ts      # 文档集合：标签、活动文档、保存/关闭编排
+│           │   ├── useTheme.ts           # 主题模式
 │           │   ├── useAppearanceSettings.ts # 外观与编辑器偏好
 │           │   ├── useAppLanguage.ts    # i18next 语言切换
 │           │   ├── useLoginItem.ts      # 开机自启
@@ -342,6 +353,9 @@ biu-text/
 │           │   └── useDebounce.ts       # 通用防抖
 │           ├── lib/
 │           │   ├── markdown.ts          # markdown-it 单例与插件（含 mermaid 占位 fence 规则）
+│           │   ├── markdown-blocks.ts   # 把源码切成可独立渲染的块（增量渲染的安全边界）
+│           │   ├── block-renderer.ts    # 块级渲染 + 缓存 + 变更块检测
+│           │   ├── preview-dom.ts       # 按块增量更新预览 DOM（注释锚点 + Fragment）
 │           │   ├── diagram-hydrate.ts   # 图表异步水合：懒加载、串行队列、缓存、降级
 │           │   ├── export-document.ts   # 独立 HTML 导出模板（导出前同步水合图表）
 │           │   ├── image-insert.ts      # 在光标处插入 ![](assets/…)
@@ -370,8 +384,9 @@ biu-text/
 ```text
 App
 ├── Toolbar                 // 新建/打开/保存/导出/格式化/预览开关/设置
+├── TabBar                  // 标签列表、脏标记、关闭按钮、新建按钮
 ├── flex 容器
-│   ├── Editor (CodeMirror) // 宽度 = leftPercent 或 100%
+│   ├── Editor (CodeMirror) // 每个标签一个实例；只有活动标签参与布局（其余 display:none）
 │   ├── Splitter            // 仅预览可见时渲染
 │   └── Preview (ref)       // 宽度 = 100 - leftPercent
 ├── StatusBar               // 行:列 · 词/字符/行 · UTF-8 · 语言 · 字号 · 预览主题 · 主题模式
@@ -382,7 +397,7 @@ App
 
 | 状态 | 归属 | 持久化 | 说明 |
 |------|------|--------|------|
-| `content` / `filePath` / `savedContent` | `useFile` | 否（文件本身） | `isDirty = content !== savedContent` |
+| `documents[]` / `activeId` | `useDocuments` | 否（文件本身） | 每个 `TabDocument` 自带 `content` / `filePath` / `savedContent` / `cursor`，`isDirty = content !== savedContent` |
 | 主题模式 | `useTheme` | `localStorage: biu-text:theme-mode` | 同时写入主进程 `nativeTheme` |
 | 外观与编辑器偏好 | `useAppearanceSettings` | `localStorage: biu-text:appearance` | 字体、字号、预览主题、Tab、行高、行号、自动保存间隔 |
 | 开机自启 | `useLoginItem` | OS 登录项 | 经 IPC |
@@ -399,8 +414,8 @@ App
 
 ```text
 CodeMirror onChange
-  └─ useFile.setContent → App 重渲染
-       ├─ Preview: useDebounce(content, 80) → renderMarkdown → DOMPurify → dangerouslySetInnerHTML
+  └─ useDocuments.setContent(activeId, value) → App 重渲染
+       ├─ Preview: useDebounce(content, 80) → splitMarkdownBlocks → 块级 renderMarkdown + DOMPurify → applyBlocks
        ├─ useWordCount: useMemo 重算
        ├─ StatusBar: 展示新统计
        └─ 标题：isDirty 变化 → windowAPI.setTitle + document.title
@@ -410,12 +425,13 @@ CodeMirror onChange
 
 | Hook | 职责 | 外部依赖 |
 |------|------|----------|
-| `useFile` | 文档状态机、新建/打开/保存/另存、自动保存、导出、菜单事件、关闭确认、标题 | `window.fileAPI`、`window.windowAPI`、i18next |
+| `useDocuments` | 文档集合状态机：标签增删切换、每标签脏标记/光标、新建/打开/保存/另存、自动保存、导出、菜单事件、关闭标签与关窗确认、标题；另有 `renamePath` / `closeByPath` / `isPathDirty` 供文件树调用 | `window.fileAPI`、`window.windowAPI`、i18next、`shared/documents.ts` |
+| `useWorkspace` | 文件树状态：打开/刷新/关闭文件夹、重命名与删除（成功后同步标签）、把"是否有未保存修改"带给删除确认 | `window.workspaceAPI`、i18next、`lib/toast-store`、`shared/workspace.ts` |
 | `useTheme` | `light/dark/system` 解析与同步；循环切换 | `window.themeAPI` |
 | `useAppearanceSettings` | 外观状态读写与归一化 | `localStorage`、`editor-preferences.ts` |
 | `useAppLanguage` | `language` / `setLanguage`，同步主进程 | i18next、`window.languageAPI` |
 | `useLoginItem` | 读取/设置登录项，失败回退 | `window.loginAPI` |
-| `useWordCount` | 中文字符逐字计数 + 英文按词计数 + 行数 | 无 |
+| `useWordCount` | 中文字符逐字计数 + 英文按词计数 + 行数；单遍字符扫描（不分配中间字符串），调用方用 200ms 防抖 | 无 |
 | `useToast` | 用 `useSyncExternalStore` 订阅 Toast 队列 | `lib/toast-store.ts` |
 | `useNotifications` | 订阅 `windowAPI.onNotify`，把主进程通知入队 | `window.windowAPI` |
 | `useDebounce` | 通用值防抖 | 无 |
@@ -503,7 +519,7 @@ const extensions = [
 
 | 来源 | 生效范围 | 快捷键 |
 |------|----------|--------|
-| Electron 菜单（全平台） | 全局 | ⌘/Ctrl+N/O/S/⇧S/⇧E/⇧P/F/H、撤销重做、剪切复制粘贴、缩放、全屏 |
+| Electron 菜单（全平台） | 全局 | ⌘/Ctrl+N/O/⇧O/S/⇧S/⇧E/⇧P/F/H、撤销重做、剪切复制粘贴、缩放、全屏（⇧O 为「打开文件夹」） |
 | CodeMirror keymap（`Prec.highest`） | 编辑器聚焦时 | ⌘F/⌘H/⌘B/⌘I/⌘`/⌘K |
 | 工具栏按钮 | 鼠标 | 新建/打开/保存/导出/格式化/预览/设置 |
 
@@ -524,7 +540,8 @@ const extensions = [
 
 - 扩展数组在每次 React 渲染时重建，`@uiw/react-codemirror` 会做增量重配置；常规输入不会触发额外渲染，但偏好变更会造成一次完整 reconfigure。
 - `placeholder` 与 `searchPhrases` 在模块作用域读取 `i18n.language`；语言切换后需一次重渲染才会更新（切换语言本身会触发重渲染，实际可用）。
-- 编辑器内容是**受控**的（`value={content}`），超长文档下每次 `onChange` 都会走 React 状态更新；目前无虚拟化，5MB 级文档需实测（§17 R6）。
+- 编辑器内容是**受控**的（`value={doc.content}`），超长文档下每次 `onChange` 都会走 React 状态更新；目前无虚拟化。5MB 级文档的实测见 §14.3（改一段 ≈102ms，R6 部分解决）。
+- **多标签**：每个标签一个独立实例（非活动标签 `display:none`），因此每次按键仍只更新活动标签的编辑器；但 `App` 会重渲染全部 `Editor` 组件（`value` 未变的实例不会 dispatch），标签数很多时 diff 成本线性上升。
 
 ---
 
@@ -535,20 +552,51 @@ const extensions = [
 ```text
 content
   └─ useDebounce(80ms)
-       └─ renderMarkdown(content, env)  [markdown-it 单例，同步、纯函数]
-            ├─ highlightCode()  [highlight.js]
-            ├─ 插件：footnote / emoji / katex / task-lists
-            ├─ link_open 规则：http(s) 链接补 target=_blank rel=noopener
-            ├─ image 规则：读取 env.resolveImageSrc，把相对路径改写成 biu-image://
-            └─ fence 规则：```mermaid → 输出占位 <div class="biu-diagram" data-diagram-id>，
-                            同时把 {id, lang, code} 收进 env.diagrams
-       └─ DOMPurify.sanitize({ ADD_ATTR: ['target','rel'], ADD_TAGS: ['iframe'], ALLOWED_URI_REGEXP })
-            └─ dangerouslySetInnerHTML → <article class="markdown-body">
-                 └─ useEffect → hydrateDiagrams(container, env.diagrams, { theme, signal })
-                      └─ 懒加载 mermaid → render() → DOMPurify(SVG) → 填充占位块
+       └─ IncrementalSplitter.split(content)   [增量切块：只重扫改动所在的窗口]
+            └─ 按「可证明安全的空行边界」切块（规则见 §8.1.1）
+                 └─ 对每个块：查缓存 → 未命中才做下面这段
+                      ├─ renderMarkdown(block.text, env)  [markdown-it 单例，同步、纯函数]
+                      │    ├─ highlightCode()  [highlight.js]
+                      │    ├─ 插件：footnote / emoji / katex / task-lists
+                      │    ├─ link_open 规则：http(s) 链接补 target=_blank rel=noopener
+                      │    ├─ image 规则：读取 env.resolveImageSrc，把相对路径改写成 biu-image://
+                      │    └─ fence 规则：```mermaid → 占位 <div class="biu-diagram" data-diagram-id>，
+                      │                    id 前缀取块 key，保证跨块唯一
+                      └─ DOMPurify.sanitize({ ADD_ATTR: ['target','rel'], ADD_TAGS: ['iframe'], ALLOWED_URI_REGEXP })
+       └─ applyBlocks / appendBlocks        [每块一个注释锚点，只替换/追加变化的块]
+            └─ hydrateDiagrams(article, changedBlock.diagrams)  [只水合新块]
+                 └─ 懒加载 mermaid / chart.js / viz → 填充占位块
+
+分帧：每帧最多渲染 FRAME_BUDGET_MS(12ms)；`render` 返回 `done: false` 时下一帧用
+requestAnimationFrame 接着渲染，首屏因此不会一次性阻塞主线程。
 ```
 
-渲染被拆成两段：**同步段产出占位符，异步段（水合）填充图表**。`renderMarkdown` 始终保持同步与纯函数，图表不进入它的返回值，因此主线程不会被 mermaid 阻塞。详见 §8.8。
+渲染仍分两段：**同步段产出占位符，异步段（水合）填充图表**。`renderMarkdown` 保持同步纯函数。
+
+### 8.1.1 增量渲染（v1.1）
+
+**问题**：PRD 要求 5MB 文档不卡顿，而整篇 `markdown-it` 渲染 + DOMPurify + `innerHTML` 替换都是 O(文档)。
+实测 5MB 文档一次整篇渲染约 18s（jsdom，见 §14.3），其中 DOMPurify 与 `innerHTML` 占绝大部分。
+即使只做"按块切分"，每次编辑仍要全文重扫一遍才能知道切到哪（5MB ≈ 43ms）。
+
+**做法**：三级增量——**切块增量 + 渲染缓存 + DOM 增量**。用户改一段，链路上只处理那一小段。
+
+| 关注点 | 做法 |
+|--------|------|
+| 切块（全量） | 只在**可证明安全**的空行边界切分：围栏代码块内部不切；空行后是缩进行不切；空行前是列表项/缩进行/缩进围栏收尾不切（松紧列表会因此产生 `<li><p>` 差异）；出现引用定义、脚注定义或以 `<` 开头的原始 HTML 行时**放弃分段**，整篇渲染 |
+| 切块（增量） | `IncrementalSplitter` 记住上一次的块边界：先求新旧内容的公共前后缀（分块 `slice ===` 走 memcmp，比逐字符快数倍），定位改动落在哪个块，只对「该块 ± 1 个邻居」的窗口重新扫描，然后**重新校验窗口两侧的接缝**（用与全量扫描完全相同的 `boundaryAllows` 规则），接缝不成立就扩大窗口重试，最坏退回整篇重切。围栏状态可以重新起算，因为窗口起点一定是合法块边界（围栏已闭合） |
+| 正确性 | 硬约束是「逐块拼接 === 整篇渲染」逐字节相同。`markdown-blocks.test.ts` 用 22 条语料 + PRD.md / Arch.md 两篇真实文档比对字节结果；另有一条**随机编辑性质测试**：对两篇真实文档连续施加 40 次随机插入/删除，每步都要求增量切分结果与「从头切一遍」逐块相同，并断言增量路径命中率 > 70%（防止性质测试悄悄退化成每次全量） |
+| 缓存键 | `b<内容 FNV-1a>-<长度>-<上下文哈希>`；上下文包含文档路径（影响图片地址改写），所以换文档不会命中旧 HTML。key 用「对区间做哈希」，命中时连字符串切片都不做 |
+| 缓存容量 | 上限 600 块，按插入顺序淘汰，但绝不淘汰本次用到的块 |
+| DOM 更新 | 每块前置一个注释锚点 `<!--biu-block:key-->`（注释不参与 `:first-child` / `+` 选择器，不影响排版）。`applyBlocks()` 只替换变化块；分帧补齐时走 `appendBlocks()`，把新增块拼成一段 HTML **一次解析、一次追加**（逐块建 template 的开销在上万块时比渲染本身还大） |
+| 分帧 | `render(content, options, budgetMs)` 是**可分帧**的：一次只渲染到预算用完，返回 `done: false`，调用方下一帧接着渲染。命中缓存的块不受预算限制（否则大文档每次编辑要分几十帧）。首帧因此只占用约 12ms，剩余块在后续帧补齐 |
+| 批量消毒 | 连续未命中的块每 32 块包进 `<div data-biu-block=key>` **一次消毒**，再按包装节点拆回。Chromium 下消毒开销基本按字节线性，固定成本不大；批量主要让单帧粒度可控，包装节点同时充当 HTML 解析的修复边界 |
+| 图表 | 占位 id 带块 key 前缀（`<blockKey>-0`），跨块唯一；水合只处理本次重建的块，并按块记录 AbortController，避免误杀其它块的在途渲染 |
+| 回退 | 任何拿不准的情况（上下文变化、上一轮已整篇回退、窗口内出现引用定义/原始 HTML、接缝对不上、改动吞掉整个窗口）都退回整篇重切，结果永远等价于从头切一遍 |
+
+**为什么不干脆用增量解析器**：`markdown-it` 没有增量解析，换 `@lezer/markdown` 需要重写整条 HTML 渲染链。按块切分在正确性可验证的前提下拿到了绝大部分收益。
+
+
 
 ### 8.2 markdown-it 配置
 
@@ -572,7 +620,9 @@ new MarkdownIt({
 
 ### 8.4 消毒策略
 
-DOMPurify 是**唯一信任边界**：任何进入 `innerHTML` 的 HTML 都必须先过消毒。预览与导出复用同一份 `renderMarkdown` 与相同的消毒参数，保证"所见即导出"。
+DOMPurify 是**唯一信任边界**：任何进入 DOM 的 HTML 都必须先过消毒。预览与导出复用同一份 `renderMarkdown` 与相同的消毒参数，保证"所见即导出"。
+
+v1.1 起预览**按块消毒**（`BlockRenderer` 里逐块 `sanitize` 后缓存），随后用 `<template>.innerHTML` 把已消毒的 HTML 解析成节点插入——消毒永远发生在解析之前，边界没有变化。
 
 当前参数放宽了 `target/rel` 属性和 `iframe` 标签：前者为外链所需；后者当前白名单较宽，必要性待复核（见 §17 R3）。
 
@@ -592,7 +642,7 @@ DOMPurify 是**唯一信任边界**：任何进入 `innerHTML` 的 HTML 都必�
 ```
 
 - **改写规则**（`src/shared/image-url.ts`）：只有相对路径会被改写；`http(s):`、`data:`、`file:` 等显式协议、协议相对地址与绝对路径一律原样返回，由 CSP 决定放行与否。导出用的是不带 `env` 的 `renderMarkdown`，因此导出的 HTML 保留原始相对引用。
-- **目录来源**：`useFile` 在 `filePath` 变化时经 `document:set-path` 通知主进程；未保存的新文档没有目录，图片一律 403。
+- **目录来源**：`useDocuments` 在活动标签的 `filePath` 变化时经 `document:set-path` 通知主进程；未保存的新文档没有目录，图片一律 403。切换标签会同步切换白名单目录。
 - **协议注册**：`protocol.registerSchemesAsPrivileged([{ scheme: 'biu-image', privileges: { standard, secure, stream } }])` 必须在 app ready 之前执行；handler 在 `whenReady` 中注册。
 - **缓存隔离**：URL 追加 `&d=<当前文档路径>`。Chromium 的图片缓存按 URL 命中，若省掉这个参数，两个不同目录下同名的 `assets/pic.png` 会互相串图。主进程不读取该参数。
 - **消毒兼容**：DOMPurify 默认 `ALLOWED_URI_REGEXP` 会剥掉未知协议，因此预览侧覆盖为 `PREVIEW_ALLOWED_URI_REGEXP`（默认榜单 + `biu-image`）。`data:` 图片走 DOMPurify 的独立分支，不受影响。
@@ -608,7 +658,13 @@ DOMPurify 是**唯一信任边界**：任何进入 `innerHTML` 的 HTML 都必�
 
 ### 8.7 生命周期与卸载
 
-`Preview` 为 `forwardRef`，向外暴露滚动容器，供编辑器做滚动同步。`useDebounce` 的定时器在内容变化时清理，组件卸载时无残留订阅（点击监听在 `useEffect` 中注册并在清理函数中移除）。
+`Preview` 为 `forwardRef`，向外暴露滚动容器，供编辑器做滚动同步。`useDebounce` 的定时器在内容变化时清理，点击监听在 `useEffect` 中注册并在清理函数中移除。
+
+v1.1 起 `<article>` 的内容由 `Preview` 自己管理（不再 `dangerouslySetInnerHTML`）：`useLayoutEffect` 里跑"切块 → 渲染/命中缓存 → `applyBlocks`"，React 只负责 `<article>` 这个空容器。因此：
+
+- 重新渲染（例如光标移动）不会碰 DOM 内容，已水合的图表不会被清掉；
+- 组件卸载时中止所有按块记录的水合任务，避免往已移除的节点里写 SVG；
+- 换标签会重挂载 Preview（`key={activeId}`），块缓存随实例一起丢弃，不会串文档。
 
 ### 8.8 图表水合（Mermaid / ChartJS）
 
@@ -642,7 +698,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 | 标签 | 必须关掉 `htmlLabels`：默认实现把文字放进 `<foreignObject>` 里的 XHTML，而 `USE_PROFILES: { svg: true }` 只放行 SVG 元素，消毒后节点会变成空框。改成纯 `<text>` 后标签能保住，代价是标签内不能再用 HTML（`<br>` 由 mermaid 转成 `tspan`，仍然可用） |
 | 并发 | mermaid 内部有共享状态，`render()` 并发会互相污染 → 全局串行队列（`renderQueue` 链式 `.then`） |
 | 缓存 | `Map<string, string>`，键为 `lang + theme + code`，上限 60 条、超出按插入顺序淘汰；主题不同即为不同键，天然满足"按主题分键" |
-| 取消 | 每轮水合一个 `AbortController`；`rendered`/`theme`/`i18n.language` 任一变化即 abort，旧结果不再回填 |
+| 取消 | 按块各一个 `AbortController`：块被替换/移除时只中止它自己；`theme` 或 `i18n.language` 变化时中止全部并整批重画。旧结果不回填 |
 | 安全 | ① `securityLevel: 'strict'`；② 输出再经 `DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })` |
 | 状态 | 写在宿主的 `data-diagram-state` 上：`pending → ready \| error`，便于用属性选择器调试与做样式 |
 
@@ -651,6 +707,8 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 **ChartJS**：`chartjs` 不进入 mermaid 队列。`chart-render.ts` 懒加载 `chart.js`，只注册柱状、折线、饼图、雷达需要的控制器。配置先过 `parseChartConfig`（`src/shared/chart.ts`）：只接受 JSON，类型限定 `bar | line | pie | radar`，数据必须是有限数字。非法配置分别提示 `diagram.invalidJson`、`unsupportedType`、`missingData`。预览保留 Canvas（关闭动画，悬停仍可用）；导出传 `rasterize: true`，画完后换成 PNG 并销毁 Chart。预览取消时同样销毁实例。ChartJS 不进 SVG 缓存。编辑区内联渲染不处理 `chartjs` 块。
 
 **Graphviz**：`dot` 由 `graphviz-render.ts` 懒加载 `@viz-js/viz`。WASM 内嵌在模块里，不另发请求；CSP 的 `script-src` 因此加上 `wasm-unsafe-eval`，不开放 `unsafe-eval`。输出格式固定为 SVG，布局引擎固定为 `dot`，再经与 Mermaid 相同的 DOMPurify SVG 配置消毒。亮色和暗色只改默认字色和线条色，源码里写明的颜色仍保留。渲染串行，并按语言、主题、源码缓存。编辑区内联不处理 `dot` 块。
+
+**Excalidraw**：`excalidraw` 块由 `excalidraw-render.ts` 懒加载 `@excalidraw/excalidraw`（约 1.5MB，对话框 `Canvas.tsx` 与预览渲染共用同一个 chunk）。场景 JSON 与 `.excalidraw` 文件同构，`shared/excalidraw.ts` 负责解析校验并把 `appState` 压到三个渲染字段。渲染调 `exportToSvg()` 拿 `SVGSVGElement`，取 `outerHTML` 后过与 Mermaid/Graphviz 相同的 DOMPurify SVG 配置。两点刻意取舍：`renderEmbeddables: false`（不渲染外链嵌入，避免离线挂住），`skipInliningFonts: true`（不内联手写体字体——那会去 CDN 拉字体，离线与 CSP 下必然失败；文字因此用系统字体回退，形状与布局不受影响）。编辑区内联不处理 `excalidraw` 块。
 
 **导出**：`buildExportHtmlDocument` 为 async。它在离屏 `div` 内先完成水合，再取 `innerHTML` 拼进模板。Mermaid 与 Graphviz 得到**内联 SVG**，ChartJS 得到 PNG。导出模板的 `<style>` 里也带上 `.biu-diagram*` 规则。
 
@@ -663,7 +721,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 ```text
 Editor 的 paste 捕获 / drop / 工具栏「插入图片」
   └─ App.handleImageFiles(files) / handleInsertImage()
-       ├─ useFile.saveDocument()              无路径先弹另存为，取消则返回 null，整条链路中止
+       ├─ useDocuments.saveDocument(id)       无路径先弹另存为，取消则返回 null，整条链路中止
        ├─ imageAPI.saveImages(path, files)    [invoke IMAGE_SAVE]  粘贴与拖放
        │  或 imageAPI.pickImages(path)        [invoke IMAGE_PICK]  弹出系统选图对话框
        └─ 主进程 saveImageAssets(documentPath, files)
@@ -706,13 +764,31 @@ Editor 的 paste 捕获 / drop / 工具栏「插入图片」
         └─────────────┘                  └─────────────┘
 ```
 
-- `isDirty` 由 `content !== savedContent` 派生，不单独存储。
-- 标题规则：有文件 → `文件名 · BiuText`（脏）/ `文件名 - BiuText`（净）；无文件且脏 → `未命名 · BiuText`。
-- 新建/打开/关闭共用同一道脏检查 `confirmLeaveCurrentDocument()`：脏内容时弹三态对话框（保存 / 不保存 / 取消），三条路径行为一致（§17 R10/R12 已修复）。选择"取消"或另存为被取消时，操作整体中止、文档保持原样。
+- `isDirty` 由 `content !== savedContent` 派生，不单独存储；每个 `TabDocument` 各有一份。
+- 标题规则：只反映**活动标签**——有文件 → `文件名 · BiuText`（脏）/ `文件名 - BiuText`（净）；无文件且脏 → `未命名 · BiuText`。
+- 脏检查只出现在两处：**关闭标签**（`closeDocument`）与**关闭窗口**（`confirmCloseAll`）；两处都走同一个主进程三态对话框（保存 / 不保存 / 取消），选"取消"或另存为被取消时操作整体中止、文档保持原样（§17 R10/R12）。
+- 新建与打开只是**追加标签**，不覆盖任何文档，因此不再弹确认框。
+
+### 9.1.1 多标签的文档生命周期
+
+```text
+documents: TabDocument[]        // 集合，永不为空
+activeId: string                // 指向其中一项
+
+newDocument()        → append(空文档) + activate
+openFile()/openPath()→ 路径已存在？activate 既有标签 : append(新标签) + activate
+closeDocument(id)    → 脏？三态对话框（取消则中止）→ remove
+                       移除后集合为空 → append 一个空文档（不出现零标签）
+                       移除的是活动标签 → 优先激活右边，其次左边
+```
+
+- 每个标签一个 CodeMirror 实例，非活动标签只是 `display:none`，因此撤销历史、选区、滚动位置天然隔离，不需要额外保存/恢复编辑器状态。
+- 隐藏会丢掉 `scrollTop`，所以切换到已挂载标签时显式恢复（`App` 的 `editorScrollRef`）并补一次 `requestMeasure()`。
+- 标签本身**不持久化**：重启后回到单个欢迎稿。这一条刻意不做，避免在没有「会话恢复」语义前就引入"上次打开了一堆文件"的隐式行为。
 
 ### 9.2 欢迎文档
 
-初始内容为本地化的 `welcome.document`。语言切换时，`useFile` 只在"无文件路径 + 未修改 + 内容仍等于上一版欢迎稿"时替换，避免覆盖用户输入。
+初始内容为本地化的 `welcome.document`。语言切换时，`useDocuments` 只在"仅有一个标签 + 无文件路径 + 未修改 + 内容仍等于上一版欢迎稿"时替换，避免覆盖用户输入。
 
 ### 9.3 最近文件
 
@@ -937,17 +1013,29 @@ CodeMirror 的面板文案不走 i18next，而是通过 `EditorState.phrases.of(
 
 ### 14.2 热路径
 
-1. **每次按键**：`onChange` → `setContent` → `App` 重渲染 → 子组件 diff。Preview 的 `useDebounce` 使渲染被推迟，但 `useWordCount` 每次内容变化都会 O(n) 扫描。
-2. **防抖到点**：整篇 Markdown 全量解析 + 高亮 + DOMPurify 解析 + `innerHTML` 替换。这是最主要的性能成本，随文档长度线性增长。
+1. **每次按键**：`onChange` → `setContent` → `App` 重渲染 → 子组件 diff。Preview 的 `useDebounce` 使渲染被推迟；字数统计走自己的 200ms 防抖，因此按键路径上不再有 O(n) 扫描。
+2. **防抖到点**（v1.1 起）：增量切块（公共前后缀 + 局部重扫）→ 缓存命中 → 只对变化的那块解析/高亮/消毒/替换 DOM。文档其余部分既不重新解析也不重建 DOM。
 3. **滚动**：仅一次比例计算与一次 `scrollTop` 赋值，成本低。
-4. **图表水合**：每次防抖渲染都会重跑 `hydrateDiagrams`，但命中 SVG 缓存时只做 DOM 填充，不调用 mermaid；未命中时排进串行队列。真正昂贵的是编辑器连续输入且图表不断变化的场景——此时旧任务被 abort，队列中最多残留一次进行中的渲染。
+4. **图表水合**：只水合本次被重建的块；命中 SVG 缓存时只做 DOM 填充，不调用 mermaid；未命中时排进串行队列。主题/语言变化才会整批重画。
 
 mermaid 的 1.1MB 分块是**懒加载**的：不含图表的文档从不下载它，因此不影响首次启动与冷打开。
 
 ### 14.3 大数据量风险
 
-- 5MB 文档下，每次防抖渲染都重建整个 DOM，可能造成明显卡顿；`innerHTML` 全量替换也会丢失滚动锚点。
-- 优化方向（未实施）：增量渲染、按块 diff、`requestIdleCallback` 分片、预览虚拟化、字数统计防抖。
+- **实测（真实 Electron 窗口；`BIU_PERF=1 npx playwright test e2e/perf.spec.ts` 会生成 0.2MB / 1MB 文档并打开）**：
+
+  | 文档 | 预览首帧 | 全部渲染完成 | 顶层元素 |
+  |------|---------|-------------|---------|
+  | 0.2MB | ≈ 266ms | ≈ 1.2s | 1344 |
+  | 1MB | ≈ 268ms | ≈ 5.3s | 6672 |
+
+  - **首帧几乎是常数**（≈260ms）：主要是打开文件 + 挂载 CodeMirror + 渲染第一批块，与文档大小基本无关——这正是分帧渲染要达到的效果。
+  - 「全部完成」是分帧补齐的总时长，与块数近似线性。这段时间里界面可交互，内容自顶向下逐步出现。
+  - 测试窗口不在前台，`requestAnimationFrame` 被节流、且每帧新增的块都要参与布局，所以绝对值偏悲观；前台窗口会明显更快。把帧预算从 12ms 提到 30ms，1MB 的总时长降到 ≈4.0s、但单帧明显更卡——**总时长主要由反复布局决定，不是解析**。
+  - 编辑路径（1MB，jsdom 相对值）：改一段 ≈6ms，对照旧管线整篇 ≈4.0s。
+  - jsdom 基准（`BIU_BENCH=1`）**只能看相对关系**：jsdom 的 DOMPurify 每次调用会保留大量内存（2MB 文档就能打爆默认堆），小块文本下固定开销也远高于 Chromium，拿它推绝对值会严重失真。
+- 多标签带来的额外成本只有「每个标签一个 CodeMirror 实例」与文档字符串副本；标签数量当前没有上限，也没有虚拟化。
+- 还没有做的优化：`content-visibility` 让离屏块跳过布局、预览虚拟化、把首屏填充改成"先粗后细"。
 
 ---
 
@@ -984,7 +1072,9 @@ renderer: root: src/renderer, input: index.html,
 | Playwright | `npm run test:e2e` | 启动打包后的 Electron：预览图表与 Graphviz、导出预览、写出 HTML 与 PDF |
 | i18n 校验 | `npm run check:i18n` | 三语 key 对齐 |
 
-**测试策略**：纯逻辑仍是主体（`shared/`、主进程纯函数、渲染层纯模块）。图表渲染、导出 HTML 组装、PDF 打印步骤，以及导出预览对话框和工具栏打开预览，放在 Vitest 的 jsdom 环境里测。桌面端到端用 Playwright 启动 `out/main/index.js`，覆盖真实窗口里的图表预览和 HTML/PDF 导出；`BIU_TEXT_E2E=1` 时主进程改用 `BIU_TEXT_USER_DATA` 指向的用户目录，并允许窗口直接关闭。`vitest.config.ts` 配置了 `@` / `@shared` / `@renderer` 别名；组件测试文件使用 `*.test.tsx`，并在文件头声明 `@vitest-environment jsdom`。
+**测试策略**：纯逻辑仍是主体（`shared/`、主进程纯函数、渲染层纯模块）。图表渲染、导出 HTML 组装、PDF 打印步骤，以及导出预览对话框和工具栏打开预览，放在 Vitest 的 jsdom 环境里测。桌面端到端用 Playwright 启动 `out/main/index.js`，覆盖真实窗口里的图表预览、HTML/PDF 导出、文件树（打开文件夹 → 重命名 → 删除）；`BIU_TEXT_E2E=1` 时主进程改用 `BIU_TEXT_USER_DATA` 指向的用户目录，并允许窗口直接关闭。`vitest.config.ts` 配置了 `@` / `@shared` / `@renderer` 别名；组件测试文件使用 `*.test.tsx`，并在文件头声明 `@vitest-environment jsdom`。
+
+**弹窗骨架校验**（`e2e/dialog-skeleton.ts`）：对话框的**布局**无法在 jsdom 里验证（不做布局、拿不到 Tailwind 的计算值），所以把"看起来是个正常弹窗"做成真实 Electron 里的断言：在视口内、有标题与关闭入口、标题离左/上边缘 ≥8px、最后一个操作按钮离右/下边缘 ≥8px、不横向溢出、子元素不越界。`e2e/dialogs.spec.ts` 覆盖设置面板与导出预览，`e2e/workspace.spec.ts` 覆盖重命名弹窗。写这条是因为重命名弹窗曾把 `DialogContent` 当自带内边距的容器用——功能全对、样式全坏，而当时的单元测试和功能断言都发现不了。
 
 ### 15.4 持续集成与发布
 
@@ -1066,7 +1156,7 @@ renderMarkdown(content, { diagrams })        // 保持同步、纯函数
 | `src/renderer/src/lib/diagram-hydrate.ts` | 按语言分发；Mermaid 的懒加载、串行队列、SVG 缓存、取消、降级 |
 | `src/renderer/src/lib/chart-render.ts` | ChartJS 懒加载、主题配色、预览 Canvas、导出 PNG |
 | `src/renderer/src/lib/graphviz-render.ts` | Graphviz 懒加载、固定 SVG / dot 引擎、主题默认色、导出 SVG |
-| `src/renderer/src/lib/graphviz-render.ts` | Graphviz 懒加载、固定 SVG / dot 引擎、主题默认色、导出 SVG |
+| `src/renderer/src/lib/excalidraw-render.ts` | 手绘场景懒加载 `exportToSvg`、按主题与源码缓存、SVG 消毒 |
 
 分发放在 `diagram-hydrate.ts` 的 `diagramRenderers`：`mermaid` 与 `dot` 走 SVG，`chartjs` 走 Canvas。这是按语言分发的小表，不是对外的 `registerDiagramRenderer`。
 
@@ -1157,15 +1247,61 @@ const inlinePreview = ViewPlugin.fromClass(class {
 - 图表渲染结果缓存与 §16.1 共用。
 - 必须提供开关（设置项"编辑器内联渲染"），关闭后回到纯文本；实现中要防止与撤销/重做、IME 组合输入冲突。
 
-### 16.4 多标签页（v1.1）
+### 16.4 多标签页（v1.1，已落地）
 
-当前 `useFile` 是**单文档状态**，`App` 直接消费。多标签需要：
+**已实现形态**
 
-1. 新增 `useDocuments()`：持有 `documents: DocumentState[]`、`activeId`；每个文档维护 `{ id, content, filePath, savedContent, cursor, scrollTop }`。
-2. `useFile` 的职责拆分为"单文档操作"（open/save/saveAs）与"文档集合管理"。
-3. 标题、脏标记、菜单事件（保存/另存为/导出）需路由到**当前活动文档**。
-4. 关闭标签时复用现有"脏检查"逻辑（改为 `dialog.showMessageBox` 三态）。
-5. 编辑器实例：每标签一个 CodeMirror 或单实例切换 state；前者隔离好、内存高，后者需重建 `EditorState`。
+| 关注点 | 做法 |
+|--------|------|
+| 状态 | `useDocuments()` 持有 `{ documents: TabDocument[], activeId }`；`TabDocument = { id, content, filePath, savedContent, cursor }`。滚动位置不进状态（由编辑器实例自己持有），见下一条 |
+| 纯逻辑 | `src/shared/documents.ts`：建文档、脏判断、路径归一化、标签名、关标签后该激活谁、按 id 打补丁；全部可单测 |
+| 写入路径 | 一律经 `commit(prev => next)`：在 updater 里同步刷新 `stateRef`，让定时器与 IPC 回调读到最新值（沿用 `useFile` 的既有约定） |
+| 编辑器实例 | **每标签一个 CodeMirror**，非活动标签 `display:none`。撤销历史、选区、滚动位置因此天然隔离；切回时补 `requestMeasure()` 并恢复 `scrollTop`（阴影里不保留 scrollTop） |
+| 预览 | 只渲染活动标签，带 `key={activeId}` 强制重挂载，保证切换后立即按新内容排版 |
+| 菜单/工具栏 | 保存、另存为、导出、查找、格式化都作用在活动标签；`viewsRef: Map<docId, EditorView>` 提供"活动编辑器" |
+| 关标签 | 脏 → 主进程三态对话框；移除后集合为空则补空文档；移除活动标签则优先激活右邻居 |
+| 关窗口 | `confirmCloseAll()` 逐个标签确认，任一取消整体中止 |
+| 快捷键 | `⌘/Ctrl+1-9`（渲染进程 `keydown`），第 9 个固定落最后一个标签 |
+
+**取舍说明**
+
+1. **为什么不是「单实例换 `EditorState`」**：`@uiw/react-codemirror` 以 `value` 受控驱动，切换 state 需要绕过封装直接 `view.setState()`，还要自己接管撤销历史与滚动；多实例写的代码更少、行为更接近 VSCode（每文档独立 history）。代价是每个标签一份文档副本，5 个标签各 1MB 时内存线性增长——这是可接受的下限，且真正的大文档成本在预览渲染（§14.3），不在编辑器实例数。
+2. **为什么不做「懒挂载」**：每个文档被创建时立刻成为活动标签，也就立刻需要编辑器，懒挂载没有收益。
+3. **为什么不做标签持久化**：没有「会话恢复」语义之前，重启后自动打开一堆文件属于隐式行为；等文件树落地时一起做更合理。
+4. **已知边界**：切换标签时预览区的滚动位置按比例重算而非精确恢复（预览只按比例跟随编辑器）；`⌘1-9` 在对话框打开时同样生效（未拦截）。
+
+### 16.4.1 文件树（v1.1，已落地）
+
+**职责划分**：目录遍历、重命名、删除、路径校验全在**主进程**；渲染进程只拿渲染好的树与结果，不做任何 fs 操作。这与「文件能力只在主进程」的既有约束一致（ADR-008）。
+
+```text
+菜单「打开文件夹」(Ctrl+Shift+O) 或侧边栏按钮
+  └─ invoke WORKSPACE_OPEN → 主进程 dialog.showOpenDialog({ properties: ['openDirectory'] })
+       └─ readWorkspace(root)                           [只列 Markdown + 含 Markdown 的目录]
+            ├─ 跳过隐藏项、node_modules/dist/out/.git 等
+            ├─ 上限：5000 条目 / 深度 12
+            └─ 返回 { root, entries, skipped }
+  └─ useWorkspace 写入状态 → FileTree 渲染
+
+点击文件 → useDocuments.openPath(path)                  [与「最近文件」同一条路径]
+右键 → 重命名 → 应用内对话框 → invoke WORKSPACE_RENAME
+     ├─ isValidFileName()：拒绝路径分隔符 / 控制字符 / .. / 尾点空格
+     ├─ resolveInsideRoot()：目标必须落在根目录内（防 ../ 越界）
+     ├─ 覆盖判定用 dev+ino，**放行只改大小写的重命名**（Windows/macOS 大小写不敏感）
+     └─ 成功后 useDocuments.renamePath 同步已打开标签的路径 + 刷新树
+右键 → 删除 → 主进程 dialog.showMessageBox 确认（会提示未保存修改）
+     └─ shell.trashItem() 移入回收站 → useDocuments.closeByPath 关标签 + 刷新树
+```
+
+**取舍**
+
+1. **只列 Markdown**：编辑器用不到其它文件，全量列出只是噪音。非 Markdown 目录连同其子树一起被剪掉。
+2. **不做文件系统监听**：外部改动靠手动刷新。引入 watch 需要新依赖并处理整盘监听的开销，当前没有明确需求（R16）。
+3. **删除走回收站**：用户误删可恢复，比 `unlink` 安全得多；代价是大文件被移到回收站会占盘。
+4. **重命名只改名字**：不允许跨目录移动，避免「编辑器中已打开的路径」出现难以解释的迁移。
+5. **打开文件复用 `openPath`**：文件树不是新的打开通道，只是给 `useDocuments` 提供路径，因此「已打开则激活既有标签」「同一个文件不重复开」等行为自动一致。
+6. **记住根目录，也记住显示状态（三态）**：`localStorage: biu-text:workspace-root` 存根目录，启动时 `WORKSPACE_LOAD` 恢复；`biu-text:sidebar-visible` 存显示状态。侧边栏启动时先收起，恢复成功后再展开，展开与否**优先用记住的显示状态**——`false`（手动收起）就保持收起，`null`（旧版本升级上来或清过 localStorage）才默认展开。显式「打开文件夹」属于用户动作，会覆盖掉收起的偏好。这样既不会出现"文件树占着位置但里面没有文件夹"的空壳，也不会把用户刻意收起的面板强行拉回来。
+7. **标签栏属于编辑区那一列**：`App` 的布局是「工具栏 / [侧边栏 | 编辑区列] / 状态栏」，标签栏放在编辑区列里，因此文件树能从工具栏下方一直顶到状态栏；`containerRef`（分隔条按比例计算用）也只量编辑区+预览区这一块。
 
 ### 16.5 版本影响矩阵
 
@@ -1174,7 +1310,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、工具栏「插入 Mermaid」（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts`（`MERMAID_SNIPPET`）+ `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`block-insert.ts`（块插入）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
 | v0.5 | 云图床（✅ GitHub + 自定义 HTTP 已落地）、上传占位符与重试（✅）、进度条（✅）、测试连接（✅）、批量上传（✅ 多选/多文件粘贴）、其余厂商图床（未做） | `shared/image-host.ts`、`main/image-host-store.ts`、`main/http-upload.ts`、`main/image-host-providers.ts`、`IMAGE_HOST_*` / `IMAGE_UPLOAD` / `IMAGE_UPLOAD_PROGRESS` 通道、`useImageHost` / `useImageUpload` / `upload-placeholder` / `upload-store`、`SettingsPanel/ImageHostSettings`、`UploadIndicator`、Toast 动作按钮 | 凭证安全（已用 `safeStorage`，明文降级见 §13.3）、网络失败语义（已定：保留占位符 + 重试）、进度串扰（已用 `uploadId` 隔离） |
 | v1.0 | 内联渲染（✅ v0.6）、ChartJS 预览与导出（✅）、Graphviz 预览与导出（✅）、导出前预览（✅）、自定义模板与批量导出（未做） | CodeMirror ViewPlugin、`diagramRenderers`、导出管线 | 编辑体验回归、性能、缓存一致性 |
-| v1.1 | 多标签、文件树、Excalidraw | 文档模型重构、侧边栏布局、独立编辑窗口 | 单文档假设、状态迁移 |
+| v1.1 | 多标签页（✅ 已落地）、预览增量渲染（✅ 已落地）、文件树（✅ 已落地）、手绘图 Excalidraw（✅ 已落地）、插件机制（暂缓） | `shared/documents.ts`、`hooks/useDocuments.ts`（取代 `useFile`）、`components/TabBar`、`App` 按集合渲染、`lib/markdown-blocks.ts` + `lib/block-renderer.ts` + `lib/preview-dom.ts`、`Preview` 改为手动管理 DOM、`shared/workspace.ts` + `main/workspace.ts` + `hooks/useWorkspace.ts` + `components/FileTree`、`WORKSPACE_*` 通道、`shared/excalidraw.ts` + `lib/excalidraw-render.ts` + `components/ExcalidrawEditor`、`diagramRenderers.excalidraw`、`useImageUpload` 按 docId 回填、`tabs.*` / `workspace.*` / `excalidraw.*` 三语文案 | 单文档假设（已解决）、状态迁移（已解决）、多实例内存（线性，未设上限）、分段正确性（已用真实文档字节比对兜住）、增量 DOM（已用 e2e 断言 SVG 节点不重建）、文件系统约定（大小写重命名 / 回收站 / 无监听，见 §16.6）、手绘依赖体量与字体（R17） |
 
 ---
 
@@ -1187,16 +1323,17 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R3 | `html: true` + DOMPurify 允许 `iframe` | 可嵌入外部页面，有钓鱼/隐私风险 | 移除 `iframe` 白名单或按域过滤 |
 | R4 | ~~CSP `default-src 'self'` 阻断远程图片与网络请求~~ **已修复** | 远程图片不显示；v0.4 图片功能受阻 | `img-src` 显式声明 `data: blob: https: http://127.0.0.1:* http://localhost:* biu-image:`；本地图片走自定义协议并按文档目录白名单读取（§8.5）；`connect-src` 维持关闭，上传仍由主进程发起。剩余：`https:` 任意来源的风险见 §13.3 |
 | R5 | ~~markdown-it 同步渲染 vs 图表异步渲染~~ **已修复** | 直接影响 v0.4 实现路径 | `renderMarkdown` 保持同步，fence 输出占位块并把源码收进 `env.diagrams`；`hydrateDiagrams` 在提交后异步填充，具备取消、串行队列、按 `lang+theme+code` 缓存与失败降级（§8.8）。导出路径改为 async 并预水合为内联 SVG |
-| R6 | 全量重渲染预览 + O(n) 字数统计 | 大文档卡顿、滚动跳变 | 分块渲染/空闲调度/字数防抖；先用基准文档量化 |
+| R6 | 全量重渲染预览 + O(n) 字数统计 | 大文档卡顿、滚动跳变 | **已收口**：预览三级增量（增量切块 + 块级缓存 + 增量 DOM）+ 分帧渲染 + 批量消毒；字数统计改单遍扫描并加 200ms 防抖。真实 Electron 里 1MB 文档首帧 ≈260ms、分帧填完 ≈5.3s（期间可交互），编辑路径改一段 ≈6ms。剩余：大文档"填完"总时长仍与块数线性，主要成本是反复布局（§14.3） |
 | R7 | 启动用 `sendSync` 取语言 | 主进程繁忙时阻塞首帧 | 可接受；若启动变慢改为预加载注入 + 异步切换 |
 | R8 | ~~CI 未跑 lint/typecheck/test/check:i18n~~ **已修复** | 回归风险靠人工 | 新增 `ci.yml` 的 `quality` job，`release.yml` 通过 `workflow_call` 复用并设 `needs: quality`；同时修复了 13 处既有 lint 报错。剩余动作：观察首次 CI 运行，必要时调 Node 版本或缓存策略 |
-| R9 | 单文档状态假设 | 多标签需要重构 `useFile`/`App` | 在 v1.1 前引入文档集合模型（§16.4） |
+| R9 | ~~单文档状态假设~~ **已修复** | 多标签需要重构 `useFile`/`App` | 已引入文档集合模型（`shared/documents.ts` + `hooks/useDocuments.ts`），`useFile` 删除，`App` 改为按 `documents` 渲染编辑器并路由活动标签（§16.4）。遗留：`documents` 未持久化 |
 | R10 | ~~关闭确认使用 `window.confirm`，无"保存"选项~~ **已修复** | 用户只能丢弃或取消；样式不统一 | 改为主进程 `dialog.showMessageBox` 三态按钮（保存 / 不保存 / 取消，`cancelId` 指向取消），经 `APP_CONFIRM_DISCARD` 由渲染进程 invoke；文案三语对齐 |
 | R11 | 无结构化日志/崩溃上报 | 线上问题难定位 | 主进程统一日志（分级 + 落盘），渲染进程 `window.onerror` 上报主进程 |
-| R12 | ~~新建/打开不提示保存脏内容~~ **已修复** | 可能丢失未保存修改 | `useFile` 抽出 `confirmLeaveCurrentDocument()`，新建/打开/打开最近文件/关闭四条路径共用；选"保存"时执行真实写盘，写盘失败或另存为被取消则中止操作 |
+| R12 | ~~新建/打开不提示保存脏内容~~ **已修复（多标签后规则收敛）** | 可能丢失未保存修改 | 新建/打开改为追加标签，不再覆盖文档，草稿天然保留；脏确认收敛到「关标签」与「关窗口」两处，关窗口逐个标签确认（§4.5.3）。写盘失败或另存为被取消仍会中止操作 |
 | R13 | 预览外链点击处理为兜底空操作，依赖主进程拦截 | 行为耦合、可读性差 | 明确由 `setWindowOpenHandler` 负责，移除或注释化渲染层监听 |
 | R14 | 5 个 Radix 包（dialog、dropdown-menu、scroll-area、toast、tooltip）已装未用 | 增大依赖体积与安装时间 | toast 已在 v0.4 用于轻量通知（§6.6），tooltip 用于工具栏提示；剩余包按需移除，或在引入对应能力时复用 |
-| R15 | 图片资产无生命周期管理（仅本地模式） | 移动/重命名文档后 `assets/` 里的图片与 Markdown 断链；删除图片行不会回收文件；导出把图片内联成 `data:` 会让大图文档的 HTML/PDF 明显变大 | v0.5 的云图床模式已不再写本地 `assets/`，断链与回收问题因此只影响本地模式；仍需补"文档 → 资产"归属与孤儿清理。导出侧可加"内联/外链"开关 |
+| R16 | 文件树不监听文件系统 | 外部新增/删除/改名后树是旧的，需要手动刷新；若外部删除了已打开的文件，保存会失败 | 先在头部提供刷新按钮（已实现）。若后续要做监听，用 `fs.watch` 只监听根目录一层 + 去抖，而不是整棵树递归；本项暂不引入新依赖 |
+| R17 | 手绘图依赖体量大 + 字体不内联 | `@excalidraw/excalidraw` 约 1.5MB，打开编辑器或遇到 `excalidraw` 块时才下载（懒加载，不进主包）；导出 SVG 不内联手写体字体，文字用系统字体回退，视觉与编辑器内略有差异 | 体量已用懒加载隔离；若后续要统一字体观感，可把 `excalidraw-assets` 里的字体复制进 `public/` 并设置 `window.EXCALIDRAW_ASSET_PATH` 指向本地路径（CSP `default-src 'self'` 允许同源） |
 
 ---
 
@@ -1285,7 +1422,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 |--------|------|
 | 进程与 IPC 全貌 | `src/main/index.ts`、`src/preload/index.ts`、`src/shared/ipc-channels.ts` |
 | 组合根与布局 | `src/renderer/src/App.tsx` |
-| 文档状态 | `src/renderer/src/hooks/useFile.ts` |
+| 文档状态 | `src/renderer/src/hooks/useDocuments.ts`、`src/shared/documents.ts` |
 | 编辑器 | `src/renderer/src/components/Editor/index.tsx` |
 | 渲染与消毒 | `src/renderer/src/components/Preview/index.tsx`、`lib/markdown.ts` |
 | 导出 | `src/renderer/src/lib/export-document.ts`、`src/main/index.ts`（`FILE_EXPORT_*`） |
@@ -1300,6 +1437,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 - [ ] 新增 IPC 通道已登记到 `ipc-channels.ts`，并在 preload 门面与 `index.d.ts` 同步
 - [ ] 新增持久化字段具备归一化与容错，键名使用 `biu-text:` 前缀
 - [ ] 任何进入 `innerHTML` 的内容都经过 DOMPurify
+- [ ] 新增或改动弹窗后，跑 `e2e/dialogs.spec.ts` 的骨架校验（新弹窗要补一条 `expectDialogSkeleton`）
 - [ ] 主导航路径（新建→编辑→保存→导出→关闭）在 macOS / Windows / Linux 三平台手工验证
 - [ ] 新增依赖已评估体积、许可证与是否可与现有 CSP 共存
 

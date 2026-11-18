@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import '@/test/dom-polyfills'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -25,6 +25,7 @@ window.fileAPI = {
   onMenuNew: () => unsub(),
   onMenuOpen: () => unsub(),
   onMenuOpenRecent: () => unsub(),
+  onMenuOpenFolder: () => unsub(),
   onMenuSave: () => unsub(),
   onMenuSaveAs: () => unsub(),
   onMenuExportHtml: (cb) => {
@@ -78,6 +79,13 @@ window.languageAPI = {
   set: async (language) => language
 }
 
+window.workspaceAPI = {
+  openFolder: async () => null,
+  load: async () => null,
+  rename: async () => ({ ok: true }),
+  remove: async () => ({ ok: true })
+}
+
 afterEach(() => {
   cleanup()
   menuExportHtml = null
@@ -94,5 +102,36 @@ describe('App export preview', () => {
     render(<App />)
     menuExportHtml?.()
     expect(await screen.findByRole('heading', { name: 'Export preview' })).toBeTruthy()
+  })
+})
+
+describe('App tabs', () => {
+  it('adds a tab from the tab bar and closes it again', async () => {
+    render(<App />)
+    expect(screen.getAllByRole('tab')).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+    expect(screen.getAllByRole('tab')).toHaveLength(2)
+
+    // 新标签是干净的，关闭时不会弹确认框
+    fireEvent.click(screen.getAllByRole('button', { name: /^Close tab/ })[1])
+    await waitFor(() => expect(screen.getAllByRole('tab')).toHaveLength(1))
+  })
+
+  it('switches the active tab with Ctrl+1 and Ctrl+2', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(window, { key: '1', ctrlKey: true })
+    await waitFor(() =>
+      expect(screen.getAllByRole('tab')[0].getAttribute('aria-selected')).toBe('true')
+    )
+
+    fireEvent.keyDown(window, { key: '2', ctrlKey: true })
+    await waitFor(() =>
+      expect(screen.getAllByRole('tab')[1].getAttribute('aria-selected')).toBe('true')
+    )
   })
 })

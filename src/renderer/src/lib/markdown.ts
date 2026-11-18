@@ -100,7 +100,8 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const diagrams = env?.diagrams as DiagramCollector | undefined
   const lang = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
   if (diagrams && isDiagramLang(lang)) {
-    const id = `d${diagrams.length}`
+    const prefix = env?.diagramIdPrefix ?? 'd'
+    const id = `${prefix}${diagrams.length}`
     diagrams.push({ id, lang, code: token.content })
     return `<div class="biu-diagram" data-diagram-id="${id}" data-diagram-lang="${lang}" data-diagram-state="pending"></div>\n`
   }
@@ -112,6 +113,12 @@ export interface MarkdownRenderEnv {
   resolveImageSrc?: (src: string) => string
   /** 传入即启用图表占位收集，收集到的块由调用方负责水合 */
   diagrams?: DiagramBlock[]
+  /**
+   * 图表占位 id 的前缀，默认 `d`。
+   * 分段渲染时每块单独调用 render，必须靠前缀保证 id 全局唯一，
+   * 否则水合会按 id 选错节点。
+   */
+  diagramIdPrefix?: string
 }
 
 export function renderMarkdown(content: string, env: MarkdownRenderEnv = {}): string {

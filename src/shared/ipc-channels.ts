@@ -4,6 +4,7 @@ export const IPC = {
   MENU_NEW_FILE: 'menu:new-file',
   MENU_OPEN_FILE: 'menu:open-file',
   MENU_OPEN_RECENT: 'menu:open-recent',
+  MENU_OPEN_FOLDER: 'menu:open-folder',
   MENU_SAVE: 'menu:save',
   MENU_SAVE_AS: 'menu:save-as',
   MENU_EXPORT_HTML: 'menu:export-html',
@@ -47,6 +48,12 @@ export const IPC = {
   IMAGE_HOST_TEST: 'image-host:test',
   IMAGE_UPLOAD: 'image:upload',
   IMAGE_UPLOAD_PROGRESS: 'image:upload-progress',
+
+  // 工作区（文件树）
+  WORKSPACE_OPEN: 'workspace:open',
+  WORKSPACE_LOAD: 'workspace:load',
+  WORKSPACE_RENAME: 'workspace:rename',
+  WORKSPACE_DELETE: 'workspace:delete',
 
   // 主题
   THEME_GET: 'theme:get',

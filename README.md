@@ -7,11 +7,14 @@
 - **分栏编辑**：CodeMirror 6 编辑区 + markdown-it 预览区，拖拽分隔条调整比例
 - **实时预览**：输入防抖 80ms，编辑区与预览区滚动联动
 - **文件操作**：新建 / 打开 / 保存 / 另存为（⌘N / ⌘O / ⌘S / ⌘⇧S），未保存提示与关闭确认
+- **多标签页**：每个标签独立的内容、撤销历史与光标；⌘/Ctrl+1-9 切换，关闭脏标签或窗口前逐项确认
+- **文件树**：打开文件夹后只列 Markdown 文件，点击在标签栏打开；右键重命名/删除（删除走回收站）
 - **Markdown 扩展**：GFM 表格、任务列表、删除线、代码高亮（highlight.js）、数学公式（KaTeX）、脚注、Emoji、自动链接
 - **快捷键**：粗体 ⌘B、斜体 ⌘I、行内代码 ⌘`、链接 ⌘K、查找 ⌘F
 - **主题与外观**：亮 / 暗 / 跟随系统，编辑器字体（JetBrains Mono / Fira Code / Menlo）、预览字体与字号、GitHub / Notion 预览主题
 - **图片**：粘贴 / 拖放 / 工具栏插入；本地模式写入文档同目录 `assets/`，云图床支持 **GitHub** 与**自定义 HTTP 接口**，上传时有占位符、进度条，失败可一键重试
 - **图表**：Mermaid 围栏代码块在预览区实时渲染，失败降级为源码 + 错误提示
+- **手绘图**：工具栏「插入手绘图」打开 Excalidraw，插入的 `excalidraw` 代码块在预览与导出中渲染为 SVG（保留可编辑性）
 - **导出**：HTML（⌘⇧E）与 PDF（⌘⇧P），图片与图表一并内联
 - **多语言**：简体中文 / 繁体中文 / 英文，跟随系统或手动切换
 - **状态栏**：行:列、字数 / 字符 / 行数、UTF-8
@@ -98,10 +101,10 @@ src/
 ├── preload/       # 预加载脚本（暴露 fileAPI / themeAPI / windowAPI）
 ├── renderer/      # React 渲染进程
 │   └── src/
-│       ├── components/   # Editor、Preview、Toolbar、Splitter、StatusBar
-│       ├── hooks/        # useFile、useTheme、useWordCount、useAppearanceSettings
-│       └── lib/          # markdown 渲染、utils
-└── shared/        # IPC channel 常量
+│       ├── components/   # Editor、Preview、TabBar、FileTree、Toolbar、Splitter、StatusBar
+│       ├── hooks/        # useDocuments、useWorkspace、useTheme、useWordCount、useAppearanceSettings
+│       └── lib/          # markdown 渲染、增量切块、utils
+└── shared/        # IPC channel 常量、文档集合模型（documents.ts）、文件树模型（workspace.ts）、i18n
 ```
 
 ## 文档

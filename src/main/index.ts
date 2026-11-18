@@ -10,6 +10,7 @@ import { imageContentType, isInsideDirectory, resolveImageRequest } from './imag
 import { imageFileName } from './image-save'
 import { inlineLocalImages } from './export-image'
 import { writePdfDocument } from './export-pdf'
+import { readWorkspace, renameWorkspaceEntry, trashWorkspaceEntry } from './workspace'
 import { loadImageHostConfig, saveImageHostConfig } from './image-host-store'
 import { testImageHost, uploadImage } from './image-host-providers'
 import {
@@ -232,6 +233,7 @@ function buildMenu(): void {
       newFile: () => mainWindow?.webContents.send(IPC.MENU_NEW_FILE),
       openFile: () => mainWindow?.webContents.send(IPC.MENU_OPEN_FILE),
       openRecent: (path) => mainWindow?.webContents.send(IPC.MENU_OPEN_RECENT, path),
+      openFolder: () => mainWindow?.webContents.send(IPC.MENU_OPEN_FOLDER),
       save: () => mainWindow?.webContents.send(IPC.MENU_SAVE),
       saveAs: () => mainWindow?.webContents.send(IPC.MENU_SAVE_AS),
       exportHtml: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_HTML),
@@ -342,6 +344,63 @@ ipcMain.handle(IPC.IMAGE_PICK, async (_e, documentPath: unknown) =>
 
 // 云图床模式下不落盘，直接把字节交回渲染进程上传
 ipcMain.handle(IPC.IMAGE_PICK_INPUT, () => pickImageFiles())
+
+// ─── 工作区（文件树）────────────────────────────────────────────
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+ipcMain.handle(IPC.WORKSPACE_OPEN, async () => {
+  if (!mainWindow) return null
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: t('workspace.openFolder'),
+    properties: ['openDirectory']
+  })
+  if (canceled || !filePaths[0]) return null
+  return readWorkspace(filePaths[0])
+})
+
+ipcMain.handle(IPC.WORKSPACE_LOAD, async (_event, payload: { root?: unknown }) => {
+  const root = asString(payload?.root)
+  if (!root || !isAbsolute(root)) return null
+  return readWorkspace(root)
+})
+
+ipcMain.handle(
+  IPC.WORKSPACE_RENAME,
+  async (_event, payload: { root?: unknown; path?: unknown; name?: unknown }) => {
+    const root = asString(payload?.root)
+    const target = asString(payload?.path)
+    const name = asString(payload?.name)
+    if (!root || !isAbsolute(root) || !target) return { ok: false, error: 'invalid' as const }
+    return renameWorkspaceEntry(root, target, name)
+  }
+)
+
+ipcMain.handle(
+  IPC.WORKSPACE_DELETE,
+  async (_event, payload: { root?: unknown; path?: unknown; dirty?: unknown }) => {
+    const root = asString(payload?.root)
+    const target = asString(payload?.path)
+    if (!mainWindow || !root || !isAbsolute(root) || !target) return { ok: false }
+
+    // 危险操作走原生确认框，与「未保存确认」保持同一层级
+    const name = basename(target)
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: t('workspace.confirmDeleteTitle'),
+      message: t('workspace.confirmDeleteMessage', { name }),
+      detail: payload?.dirty ? t('workspace.confirmDeleteDirty', { name }) : undefined,
+      buttons: [t('workspace.delete'), t('workspace.cancel')],
+      defaultId: 1,
+      cancelId: 1
+    })
+    if (response !== 0) return { ok: false, canceled: true }
+    return trashWorkspaceEntry(root, target)
+  }
+)
+
 
 // ─── 云图床 ─────────────────────────────────────────────────────
 
