@@ -7,6 +7,7 @@ import {
   findDocumentByPath,
   isDocumentDirty,
   isPathWithin,
+  moveDocument,
   neighborDocumentId,
   nextDocumentId,
   normalizePath,
@@ -193,6 +194,38 @@ describe('patchDocument', () => {
 
   it('id 不存在时返回同一个对象，避免无意义重渲染', () => {
     expect(patchDocument(state, 'zzz', { content: 'x' })).toBe(state)
+  })
+})
+
+describe('moveDocument', () => {
+  const documents = [doc('a'), doc('b'), doc('c')]
+
+  it('向前移动插到目标位置之前', () => {
+    expect(moveDocument(documents, 'c', 0)?.map((item) => item.id)).toEqual(['c', 'a', 'b'])
+    expect(moveDocument(documents, 'c', 1)?.map((item) => item.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('向后移动按移动前的下标换算', () => {
+    expect(moveDocument(documents, 'a', 2)?.map((item) => item.id)).toEqual(['b', 'a', 'c'])
+    expect(moveDocument(documents, 'a', 3)?.map((item) => item.id)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('拖到邻居左侧不算移动，返回 null', () => {
+    expect(moveDocument(documents, 'b', 2)).toBeNull()
+  })
+
+  it('原地不动返回 null', () => {
+    expect(moveDocument(documents, 'b', 1)).toBeNull()
+    expect(moveDocument(documents, 'a', 0)).toBeNull()
+  })
+
+  it('越界下标夹到有效范围', () => {
+    expect(moveDocument(documents, 'b', 99)?.map((item) => item.id)).toEqual(['a', 'c', 'b'])
+    expect(moveDocument(documents, 'b', -5)?.map((item) => item.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('id 不存在时返回 null', () => {
+    expect(moveDocument(documents, 'zzz', 0)).toBeNull()
   })
 })
 

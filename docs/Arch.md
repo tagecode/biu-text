@@ -1,9 +1,9 @@
 # BiuText 技术架构文档
 
-> **文档版本**：v1.1
-> **对应代码版本**：v1.1.0（`package.json`）
+> **文档版本**：v1.2
+> **对应代码版本**：v1.2.0（`package.json`）
 > **日期**：2026-11-19
-> **状态**：现行架构说明 + v1.0–v1.1 演进（v1.1.0 已发布）
+> **状态**：现行架构说明 + v1.0–v1.2 演进（v1.1.0、v1.2.0 均已发布）
 > **关联文档**：[产品需求文档（PRD）](./PRD.md)
 
 ---
@@ -488,6 +488,7 @@ const extensions = [
   placeholder(i18n.t('editor.placeholder')),
   EditorState.phrases.of(searchPhrases(language)),
   search({ top: true }),                  // 查找/替换，含正则、大小写、全词
+  inlineTables({ label: i18n.t('editor.inlineTable') }), // 顶层 GFM 表格覆盖层
   Prec.highest(keymap.of([
     { key: 'Mod-f', run: openSearchPanel },
     { key: 'Mod-h', run: openReplacePanel },
@@ -498,6 +499,8 @@ const extensions = [
   ]))
 ]
 ```
+
+`inlineTables` 只在设置里的 `inlineRender` 开启时装配（与图片、Mermaid 内联同一开关）。它必须返回 **StateField** 而不是 ViewPlugin：CodeMirror 不允许插件提供 block decoration（会抛 `RangeError: Block decorations may not be specified via plugins`）；图片与 Mermaid 的 widget 是行内替换，仍可用 ViewPlugin。
 
 ### 7.2 basicSetup 覆盖
 
@@ -616,7 +619,9 @@ new MarkdownIt({
 
 1. markdown-it 的 `link_open` 规则为 http/https 链接写入 `target="_blank"` 与 `rel="noopener noreferrer"`。
 2. 渲染进程 `Preview` 中的点击监听只是兜底（阻止默认行为），真正的打开由主进程 `webContents.setWindowOpenHandler` 拦截并调用 `shell.openExternal`，同时 `return { action: 'deny' }` 阻止应用内开窗。
-3. 相对链接目前不会在应用内跳转。
+3. `#heading` 内部链接由渲染层拦截：`ensureHeadingIds` 在每帧渲染后给 h1–h6 补 id（重复标题加 `-1`/`-2`），点击 `href="#..."` 时 `scrollToHeading` 平滑滚动到对应标题，不触发主进程开窗。
+4. 悬停 http(s) 链接 350ms 后，渲染层调用 `linkAPI.fetchPreview` 由主进程抓取页面；主进程只放行 http(s)，拒绝私有网段与 `.local`（回环地址例外，便于联调），响应上限 512KB、6s 超时，成功缓存 10 分钟、失败 2 分钟。卡片是 `pointer-events-none` 的 `role="tooltip"` 浮层，不参与布局；抓取失败静默不显示。
+5. 相对链接仍不会在应用内跳转（没有文件间导航语义）。
 
 ### 8.4 消毒策略
 
@@ -690,6 +695,8 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
 - 占位块本身不含源码，源码留在 `env.diagrams` 里——它不经过 `innerHTML`，也就绕开了"源码里的 HTML 被当成标记解析"的问题。
 
 **异步段（`lib/diagram-hydrate.ts`）**
+
+**渲染器注册表**：`diagramRenderers` 是 `Map<string, DiagramRenderer>`，mermaid / chartjs / dot / excalidraw 四个内置渲染器在模块加载时经 `registerDiagramRenderer(lang, renderer)` 注册；`getDiagramRenderer(lang)` 查表，`listDiagramRenderers()` 供调试。`lib/plugin-api.ts` 的 `registerRendererPlugin({ name, languages, render })` 会同时调用 `registerDiagramLanguage`（让 fence 规则把该语言识别为图表）与 `registerDiagramRenderer`，并按插件名去重。插件必须随应用构建进包，不从网络下载（CSP + 沙箱约束），因此这里只是**扩展点**，不是运行时插件市场。
 
 | 关注点 | 做法 |
 |--------|------|
@@ -1195,6 +1202,7 @@ Editor DOM 事件（paste / drop）或工具栏「插入图片」
              └─ custom: POST {url}（multipart/form-data）
              ├─ 进度通过 IMAGE_UPLOAD_PROGRESS 按 uploadId 回推
              └─ 返回 { ok, url } 或 { ok:false, error }
+        └─ 成功后 recordImageUpload（写 image-history.json，写盘失败只忽略，不影响上传结果）
   └─ 成功：把占位符整段替换成 ![alt](url)
      失败：保留占位符 + 8 秒失败 Toast（带「重试」动作）
 ```
@@ -1206,7 +1214,9 @@ Editor DOM 事件（paste / drop）或工具栏「插入图片」
 | `shared/image-host.ts` | 配置类型、默认值、归一化、脱敏、header 文本互转、JSON 点路径、`isSecureEndpoint`、序列化（`toStoredConfig`/`fromStoredConfig`） |
 | `main/image-host-store.ts` | `image-host.json` 读写；token 走 `safeStorage.encryptString`，密钥环不可用时退化为明文（`enc: false`） |
 | `main/http-upload.ts` | `node:https`/`node:http` 分块写入（64 KiB + `drain` 背压）产生进度，60 s 超时 |
-| `main/image-host-providers.ts` | `uploadToGithub` / `uploadToCustom` / `uploadImage` 分派 / `testImageHost` |
+| `main/image-host-providers.ts` | 内置 GitHub / 自定义 provider 与 provider 注册表（`registerImageHostProvider` / `getImageHostProvider`）；`uploadImage` / `testImageHost` 按 type 查表分派 |
+| `main/image-history-store.ts` | 上传历史 `image-history.json` 读写：`{version:1,entries}`、上限 50、同 URL 去重、写操作串行化 |
+| `main/plugin-api.ts` | 图床插件注册：`registerImageHostPlugin` / `listImageHostPlugins`，按 name 去重后登记到 provider 注册表 |
 | `renderer/lib/upload-placeholder.ts`、`upload-store.ts`、`hooks/useImageUpload.ts` | 占位符增删、进度表、上传编排与失败重试 |
 | `renderer/components/UploadIndicator.tsx` | 右下角进度卡（`role="progressbar"`） |
 
@@ -1220,7 +1230,9 @@ Editor DOM 事件（paste / drop）或工具栏「插入图片」
 6. **进度通道**：一次请求 + 多次 `IMAGE_UPLOAD_PROGRESS`，`uploadId` 关联，失败重试沿用同一 `uploadId`，避免与其它并发上传串扰。
 7. **云端文件名**：`时间戳-清洗后的原名`；剪贴板图片的文件名都是 `image.png`，同秒批量上传时按运行内已用名追加 `-2`、`-3` 后缀，避免 GitHub Contents API 因同名覆盖返回 422。
 
-**后续**：OSS/COS/七牛/又拍没有独立抽象层，只需在 `uploadImage` 分派中新增分支；若分支继续增多，再抽 `ImageHostProvider` 注册表。
+**上传历史（v1.2）**：主进程是唯一写入方。`IMAGE_UPLOAD` 成功后调 `recordImageUpload({ url, fileName, provider })`，`image-history-store.ts` 用模块内 cache + 串行写队列维护 `userData/image-history.json`（`{version:1,entries}`），按 URL 去重、按 `uploadedAt` 倒序、最多 50 条。面板通过 `IMAGE_HISTORY_LIST` / `IMAGE_HISTORY_REMOVE` 读取和删除；右键菜单由 `IMAGE_HISTORY_MENU` 调主进程原生 `Menu.popup` 返回 `'url' | 'markdown' | 'delete' | null`——不用自绘菜单，是因为 Radix Dialog 的焦点锁与 `aria-hidden` 会让浮层不可点击、读屏也读不到。
+
+**扩展方式（v1.2）**：`image-host-providers.ts` 已抽出 `ImageHostProvider { upload, test? }` 与 `registerImageHostProvider(type, provider)` / `getImageHostProvider(type)`；`uploadImage` 与 `testImageHost` 只查注册表，未注册类型直接报错。OSS/COS/七牛/又拍按同一 provider 形态补齐；第三方图床可经 `main/plugin-api.ts` 的 `registerImageHostPlugin({ name, type, provider })` 注册，插件必须随构建打包，不从网络加载。
 
 ### 16.3 编辑器内联渲染（Typora 风格）
 
@@ -1268,8 +1280,8 @@ const inlinePreview = ViewPlugin.fromClass(class {
 
 1. **为什么不是「单实例换 `EditorState`」**：`@uiw/react-codemirror` 以 `value` 受控驱动，切换 state 需要绕过封装直接 `view.setState()`，还要自己接管撤销历史与滚动；多实例写的代码更少、行为更接近 VSCode（每文档独立 history）。代价是每个标签一份文档副本，5 个标签各 1MB 时内存线性增长——这是可接受的下限，且真正的大文档成本在预览渲染（§14.3），不在编辑器实例数。
 2. **为什么不做「懒挂载」**：每个文档被创建时立刻成为活动标签，也就立刻需要编辑器，懒挂载没有收益。
-3. **为什么不做标签持久化**：没有「会话恢复」语义之前，重启后自动打开一堆文件属于隐式行为；等文件树落地时一起做更合理（v1.1 仍未做，与标签拖拽排序一起顺延）。
-4. **已知边界**：切换标签时预览区的滚动位置按比例重算而非精确恢复（预览只按比例跟随编辑器）；`⌘1-9` 在对话框打开时同样生效（未拦截）；标签拖拽排序已移出 v1.1（PRD Q8 顺延）。
+3. **为什么不做标签持久化**：没有「会话恢复」语义之前，重启后自动打开一堆文件属于隐式行为；等文件树落地时一起做更合理（v1.1 与后续都未做）。
+4. **已知边界**：切换标签时预览区的滚动位置按比例重算而非精确恢复（预览只按比例跟随编辑器）；`⌘1-9` 在对话框打开时同样生效（未拦截）；标签拖拽排序已在 v1.2 补做（只改数组顺序，不重挂载编辑器）。
 5. **关窗握手状态不跨窗口**：`closeGuard` 在 `createWindow()` 时复位。macOS 关窗不退出应用，重开窗口后再次关窗必须重新检查脏标签；`APP_CLOSE_CONFIRMED` 只对当次关闭有效（否则会静默丢弃未保存内容）。
 
 ### 16.4.1 文件树（v1.1，已落地）
@@ -1316,7 +1328,24 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、工具栏「插入 Mermaid」（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts`（`MERMAID_SNIPPET`）+ `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`block-insert.ts`（块插入）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
 | v0.5 | 云图床（✅ GitHub + 自定义 HTTP 已落地）、上传占位符与重试（✅）、进度条（✅）、测试连接（✅）、批量上传（✅ 多选/多文件粘贴）、其余厂商图床（未做） | `shared/image-host.ts`、`main/image-host-store.ts`、`main/http-upload.ts`、`main/image-host-providers.ts`、`IMAGE_HOST_*` / `IMAGE_UPLOAD` / `IMAGE_UPLOAD_PROGRESS` 通道、`useImageHost` / `useImageUpload` / `upload-placeholder` / `upload-store`、`SettingsPanel/ImageHostSettings`、`UploadIndicator`、Toast 动作按钮 | 凭证安全（已用 `safeStorage`，明文降级见 §13.3）、网络失败语义（已定：保留占位符 + 重试）、进度串扰（已用 `uploadId` 隔离） |
 | v1.0 | 内联渲染（✅ v0.6）、ChartJS 预览与导出（✅）、Graphviz 预览与导出（✅）、导出前预览（✅）、自定义模板与批量导出（未做） | CodeMirror ViewPlugin、`diagramRenderers`、导出管线 | 编辑体验回归、性能、缓存一致性 |
-| v1.1 | 多标签页（✅ 已落地）、预览增量渲染（✅ 已落地）、文件树（✅ 已落地）、手绘图 Excalidraw（✅ 已落地）；插件机制、上传历史、标签拖拽排序、链接预览、表格实时渲染移出 v1.1 | `shared/documents.ts`、`hooks/useDocuments.ts`（取代 `useFile`）、`components/TabBar`、`App` 按集合渲染、`lib/markdown-blocks.ts` + `lib/block-renderer.ts` + `lib/preview-dom.ts`、`Preview` 改为手动管理 DOM、`shared/workspace.ts` + `main/workspace.ts` + `hooks/useWorkspace.ts` + `components/FileTree`、`WORKSPACE_*` 通道、`shared/excalidraw.ts` + `lib/excalidraw-render.ts` + `components/ExcalidrawEditor`、`diagramRenderers.excalidraw`、`useImageUpload` 按 docId 回填、`tabs.*` / `workspace.*` / `excalidraw.*` 三语文案 | 单文档假设（已解决）、状态迁移（已解决）、多实例内存（线性，未设上限）、分段正确性（已用真实文档字节比对兜住）、增量 DOM（已用 e2e 断言 SVG 节点不重建）、重复内容块 key/图表 id 唯一（v1.1.0）、缩进围栏与列表惰性续行切块（v1.1.0）、目录级标签同步与根目录 null（v1.1.0）、关窗状态按窗口复位（v1.1.0）、文件系统约定（大小写重命名 / 回收站 / 无监听，见 §16.6）、手绘依赖体量与字体（R17） |
+| v1.1 | 多标签页（✅ 已落地）、预览增量渲染（✅ 已落地）、文件树（✅ 已落地）、手绘图 Excalidraw（✅ 已落地）；插件机制、上传历史、标签拖拽排序、链接预览、表格实时渲染移出 v1.1 | `shared/documents.ts`、`hooks/useDocuments.ts`（取代 `useFile`）、`components/TabBar`、`App` 按集合渲染、`lib/markdown-blocks.ts` + `lib/block-renderer.ts` + `lib/preview-dom.ts`、`Preview` 改为手动管理 DOM、`shared/workspace.ts` + `main/workspace.ts` + `hooks/useWorkspace.ts` + `components/FileTree`、`WORKSPACE_*` 通道、`shared/excalidraw.ts` + `lib/excalidraw-render.ts` + `components/ExcalidrawEditor`、`diagramRenderers.excalidraw`、`useImageUpload` 按 docId 回填、`tabs.*` / `workspace.*` / `excalidraw.*` 三语文案 | 单文档假设（已解决）、状态迁移（已解决）、多实例内存（线性，未设上限）、分段正确性（已用真实文档字节比对兜住）、增量 DOM（已用 e2e 断言 SVG 节点不重建）、重复内容块 key/图表 id 唯一（v1.1.0）、缩进围栏与列表惰性续行切块（v1.1.0）、目录级标签同步与根目录 null（v1.1.0）、关窗状态按窗口复位（v1.1.0）、文件系统约定（大小写重命名 / 回收站 / 无监听，见 §16.4.1）、手绘依赖体量与字体（R17） |
+| v1.2（✅ 已发布） | 标签拖拽排序（✅）、上传历史（✅）、链接预览与内部锚点（✅）、表格实时渲染（✅）、图床/渲染器插件注册接口（✅ 预研） | `shared/documents.ts` 的 `moveDocument`、`TabBar` / `useDocuments` 拖放、`lib/inline-table.ts`（StateField）、`shared/image-history.ts` + `main/image-history-store.ts` + `components/ImageHistory`、`shared/link-preview.ts` + `main/link-preview.ts` + `lib/heading-anchor.ts` + `Preview` 卡片、`diagram.ts` / `diagram-hydrate.ts` / `lib/plugin-api.ts` 注册表、`image-host-providers.ts` + `main/plugin-api.ts`、`IMAGE_HISTORY_*` / `LINK_PREVIEW_FETCH` / `MENU_IMAGE_HISTORY` 通道 | 表格只覆盖顶层（列表/引用内保持源码）；链接预览的出站请求（SSRF 白名单、512KB/6s、缓存，见 R19）；历史写盘失败被吞掉；插件无权限模型（R20） |
+
+### 16.6 v1.1 顺延功能的补做（v1.2，已发布）
+
+五个功能都按「能力留在主进程、渲染层只拿结果」的既有边界实现；新增代码不引入全局状态，也不改变 v1.1 的文档与预览模型。
+
+**标签拖拽排序**：`shared/documents.ts` 的纯函数 `moveDocument(documents, docId, insertIndex)` 接收**移动前**数组的插入位置（0..length），内部把「向后拖」的插入点减一，返回新数组或 `null`（原地不动）。`TabBar` 只负责 HTML5 drag 事件与插入位置计算（按标签 `getBoundingClientRect()` 的中点判定左/右半区），`useDocuments.moveDocument` 调纯函数并 `commit`。因此拖拽只改数组顺序，`activeId` 不变、编辑器实例不重挂载、撤销历史与光标都不丢。
+
+**表格实时渲染**：`lib/inline-table.ts` 用 `syntaxTree` 找**顶层** `Table` 节点（`node.node.parent?.name === 'Document'`），解析出表头/对齐/单元格绝对 offset；`inlineTables` 返回 `StateField<DecorationSet>`，在文档变化、选区变化或语法树变化时重建，selection 落在表格行区间内时跳过该表（显示源码）；否则用 `Decoration.replace({ block: true })` 覆盖成 `table.cm-inline-table`（opacity 0.72，hover 0.95）。点击单元格时 `ignoreEvent` 阻止默认行为，按 `data-table-pos` 把光标 dispatch 回源码 offset，选区变化后覆盖层自动撤掉。只能覆盖顶层表格，是因为列表/引用里的缩进会改变 block decoration 的边界；这些位置保持源码编辑。
+
+**上传历史**：见 §16.2。纯函数在 `shared/image-history.ts`（`normalizeImageHistory` / `addImageHistoryEntry` / `removeImageHistoryEntry`），落盘在主进程 `main/image-history-store.ts`。面板 `components/ImageHistory` 是 Radix Dialog，列表项显示缩略图、文件名、本地化时间与 URL；右键与「更多」按钮都走 `imageAPI.showHistoryMenu()`，复制用 preload 的 `clipboard.writeText`（不经过渲染层的 `navigator.clipboard`，避免权限差异）。
+
+**链接预览**：解析在 `shared/link-preview.ts`（纯函数，无网络），抓取在 `main/link-preview.ts`（`net.fetch` + 512KB 上限 + 6s 超时 + 10/2 分钟缓存 + 重定向后再校验白名单）。`Preview` 在 mouseover 后 350ms 请求，卡片是固定定位的 `pointer-events-none` 浮层，滚动或移出即隐藏；位置先放在锚点下方，空间不足翻到上方并 clamp 在视口内。内部锚点由 `lib/heading-anchor.ts` 处理：每帧渲染后补标题 id（重复标题加序号），点击 `#hash` 平滑滚动。`isPreviewableUrl` 拒绝私有网段与 `.local`，只保留回环地址供本地联调。
+
+**插件注册接口（预研）**：渲染进程 `lib/plugin-api.ts` 的 `registerRendererPlugin` 把一个语言同时登记到 `isDiagramLang` 与 `diagramRenderers`；主进程 `main/plugin-api.ts` 的 `registerImageHostPlugin` 把 provider 登记到 `image-host-providers.ts` 的注册表。两者都按插件名去重，且都要求插件随应用构建；没有从磁盘/网络加载第三方代码的通道，也没有权限或签名模型。
+
+**验证**：Vitest 45 个文件通过（347 passed / 1 skipped），覆盖 `moveDocument`、表格解析与点击、历史归一化与面板交互、OG 解析、锚点 slug、provider 注册表；Playwright 18 个用例 17 passed / 1 skipped，新增 `e2e/features.spec.ts` 三例（表格覆盖与点击、历史面板复制 URL、链接卡片与内部跳转）。
 
 ---
 
@@ -1341,6 +1370,8 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R16 | 文件树不监听文件系统 | 外部新增/删除/改名后树是旧的，需要手动刷新；若外部删除了已打开的文件，保存会失败 | 先在头部提供刷新按钮（已实现）。若后续要做监听，用 `fs.watch` 只监听根目录一层 + 去抖，而不是整棵树递归；本项暂不引入新依赖 |
 | R17 | 手绘图依赖体量大 + 字体不内联 | `@excalidraw/excalidraw` 约 1.5MB，打开编辑器或遇到 `excalidraw` 块时才下载（懒加载，不进主包）；导出 SVG 不内联手写体字体，文字用系统字体回退，视觉与编辑器内略有差异；CSP 也不允许从 CDN 拉字体，编辑区同样回退 | 体量已用懒加载隔离；若后续要统一字体观感，可把 `excalidraw-assets` 里的字体复制进 `public/` 并设置 `window.EXCALIDRAW_ASSET_PATH` 指向本地路径（CSP `default-src 'self'` 允许同源） |
 | R18 | 增量预览的剩余边界 | ① 缓存上限 600 在 ≥600 块的文档上直接跳过淘汰，长时间编辑会持续增长内存；② 分帧 generation 的第一帧会移除尚未渲染的尾部旧块，之后补回，期间图表重新水合、滚动位置可能跳；③ 切换标签会重建全部块（`key={activeId}`）。v1.1.0 已修其中重复内容块 key 冲突 | 后续给缓存加真正的容量上限（按字节或 LRU）、首帧保留未渲染的尾部块、按文档复用 renderer/缓存；已在 §14.3 记录性能特征 |
+| R19 | 链接预览会发起出站请求 | 恶意链接可探测内网或拖慢主进程 | 已加白名单（仅 http(s)、拒绝私有段与 `.local`、回环例外）、512KB 上限、6s 超时、重定向后再校验；失败静默。剩余：DNS 重绑定未单独防护，缓存键是原始 URL；后续可加 DNS 解析后 IP 校验 |
+| R20 | 插件接口没有权限与签名模型 | 注册的 provider/renderer 随构建代码获得与内置能力相同的权限 | 当前只作为预研扩展点，不加载外部代码；若做插件市场，需先补清单校验、签名、权限声明与进程隔离 |
 
 ---
 

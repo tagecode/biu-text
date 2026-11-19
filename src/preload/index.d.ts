@@ -1,5 +1,7 @@
 import type { AppLanguage } from '../shared/i18n/types'
 import type { ImageFileInput } from '../shared/image-input'
+import type { ImageHistoryEntry } from '../shared/image-history'
+import type { LinkPreview } from '../shared/link-preview'
 import type { NotificationPayload } from '../shared/notification'
 import type {
   ImageHostConfigView,
@@ -35,6 +37,7 @@ interface FileAPI {
   onMenuExportPdf: (cb: () => void) => UnsubFn
   onMenuFind: (cb: () => void) => UnsubFn
   onMenuReplace: (cb: () => void) => UnsubFn
+  onMenuImageHistory: (cb: () => void) => UnsubFn
 }
 
 interface ThemeAPI {
@@ -51,6 +54,7 @@ interface WindowAPI {
   onNotify: (cb: (payload: NotificationPayload) => void) => UnsubFn
   confirmClose: () => void
   cancelClose: () => void
+  writeClipboard: (text: string) => void
 }
 
 interface LanguageAPI {
@@ -72,6 +76,9 @@ interface ImageAPI {
   setHostConfig: (view: ImageHostConfigView) => Promise<ImageHostConfigView>
   testHost: (view?: ImageHostConfigView) => Promise<ImageHostTestResult>
   upload: (request: ImageUploadRequest) => Promise<ImageUploadResult>
+  getHistory: () => Promise<ImageHistoryEntry[]>
+  removeHistory: (id: string) => Promise<ImageHistoryEntry[]>
+  showHistoryMenu: () => Promise<'url' | 'markdown' | 'delete' | null>
   onUploadProgress: (cb: (progress: ImageUploadProgress) => void) => UnsubFn
 }
 
@@ -80,6 +87,10 @@ interface WorkspaceAPI {
   load: (root: string) => Promise<WorkspaceSnapshot | null>
   rename: (root: string, path: string, name: string) => Promise<WorkspaceRenameResult>
   remove: (root: string, path: string, dirty: boolean) => Promise<WorkspaceDeleteResult>
+}
+
+interface LinkAPI {
+  fetchPreview: (url: string) => Promise<LinkPreview | null>
 }
 
 declare global {
@@ -91,5 +102,6 @@ declare global {
     loginAPI: LoginAPI
     imageAPI: ImageAPI
     workspaceAPI: WorkspaceAPI
+    linkAPI: LinkAPI
   }
 }

@@ -13,7 +13,13 @@ import { writePdfDocument } from './export-pdf'
 import { readWorkspace, renameWorkspaceEntry, trashWorkspaceEntry } from './workspace'
 import { createCloseGuard } from './close-guard'
 import { loadImageHostConfig, saveImageHostConfig } from './image-host-store'
+import {
+  loadImageHistory,
+  recordImageUpload,
+  removeImageHistoryEntryById
+} from './image-history-store'
 import { testImageHost, uploadImage } from './image-host-providers'
+import { fetchLinkPreview } from './link-preview'
 import {
   DEFAULT_IMAGE_HOST_CONFIG,
   mergeImageView,
@@ -243,7 +249,8 @@ function buildMenu(): void {
       exportHtml: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_HTML),
       exportPdf: () => mainWindow?.webContents.send(IPC.MENU_EXPORT_PDF),
       find: () => mainWindow?.webContents.send(IPC.MENU_FIND),
-      replace: () => mainWindow?.webContents.send(IPC.MENU_REPLACE)
+      replace: () => mainWindow?.webContents.send(IPC.MENU_REPLACE),
+      imageHistory: () => mainWindow?.webContents.send(IPC.MENU_IMAGE_HISTORY)
     }
   })
 
@@ -449,10 +456,11 @@ ipcMain.handle(
     }
 
     try {
+      const name = typeof payload.name === 'string' ? payload.name : 'image'
       const result = await uploadImage(
         imageHostConfig,
         {
-          name: typeof payload.name === 'string' ? payload.name : 'image',
+          name,
           mime: typeof payload.mime === 'string' ? payload.mime : '',
           bytes
         },
@@ -460,12 +468,67 @@ ipcMain.handle(
           event.sender.send(IPC.IMAGE_UPLOAD_PROGRESS, { uploadId, loaded, total })
         }
       )
+      // 历史记录写盘失败不能影响上传结果，用户要的图片已经在图床上了
+      try {
+        await recordImageUpload({
+          url: result.url,
+          fileName: result.fileName || name,
+          provider: imageHostConfig.type
+        })
+      } catch {
+        // 忽略：下次打开历史只是少一条记录
+      }
       return { ok: true, url: result.url }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   }
 )
+
+ipcMain.handle(IPC.IMAGE_HISTORY_LIST, () => loadImageHistory())
+
+ipcMain.handle(IPC.IMAGE_HISTORY_REMOVE, async (_e, id: unknown) => {
+  if (typeof id !== 'string' || id === '') return loadImageHistory()
+  return removeImageHistoryEntryById(id)
+})
+
+// 右键菜单交给主进程弹原生菜单：对话框里自绘菜单会被 aria-hidden/焦点锁挡住
+ipcMain.handle(IPC.IMAGE_HISTORY_MENU, (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
+  return new Promise<'url' | 'markdown' | 'delete' | null>((resolve) => {
+    let chosen: 'url' | 'markdown' | 'delete' | null = null
+    const menu = Menu.buildFromTemplate([
+      {
+        label: t('imageHistory.copyUrl'),
+        click: () => {
+          chosen = 'url'
+        }
+      },
+      {
+        label: t('imageHistory.copyMarkdown'),
+        click: () => {
+          chosen = 'markdown'
+        }
+      },
+      { type: 'separator' },
+      {
+        label: t('imageHistory.delete'),
+        click: () => {
+          chosen = 'delete'
+        }
+      }
+    ])
+    menu.popup({
+      window: window ?? undefined,
+      callback: () => resolve(chosen)
+    })
+  })
+})
+
+ipcMain.handle(IPC.LINK_PREVIEW_FETCH, (_event, url: unknown) => {
+  if (typeof url !== 'string') return null
+  return fetchLinkPreview(url)
+})
 
 ipcMain.handle(
   IPC.FILE_EXPORT_HTML,

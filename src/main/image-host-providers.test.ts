@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { buildMultipartBody, extractApiMessage, githubContentsUrl, githubRawUrl } from './image-host-providers'
+import { DEFAULT_IMAGE_HOST_CONFIG } from '../shared/image-host'
+import {
+  buildMultipartBody,
+  extractApiMessage,
+  getImageHostProvider,
+  githubContentsUrl,
+  githubRawUrl,
+  registerImageHostProvider,
+  uploadImage
+} from './image-host-providers'
 
 describe('githubContentsUrl', () => {
   it('builds the contents endpoint and skips the directory when empty', () => {
@@ -51,5 +60,40 @@ describe('buildMultipartBody', () => {
   it('falls back to octet-stream when the mime is empty', () => {
     const body = buildMultipartBody('B', 'f', 'a.bin', '', Uint8Array.from([0])).toString('latin1')
     expect(body).toContain('Content-Type: application/octet-stream')
+  })
+})
+
+describe('image host provider registry', () => {
+  it('dispatches uploads to a registered plugin provider', async () => {
+    const original = getImageHostProvider('custom')
+    const calls: string[] = []
+    registerImageHostProvider('custom', {
+      upload: async (_config, input) => {
+        calls.push(input.name)
+        return { url: 'https://cdn.example.com/plugin.png', fileName: 'plugin.png' }
+      }
+    })
+
+    try {
+      const result = await uploadImage(
+        { ...DEFAULT_IMAGE_HOST_CONFIG, type: 'custom' },
+        { name: 'shot.png', mime: 'image/png', bytes: Uint8Array.from([1]) },
+        () => undefined
+      )
+      expect(result).toEqual({ url: 'https://cdn.example.com/plugin.png', fileName: 'plugin.png' })
+      expect(calls).toEqual(['shot.png'])
+    } finally {
+      if (original) registerImageHostProvider('custom', original)
+    }
+  })
+
+  it('keeps the local type unregistered', async () => {
+    await expect(
+      uploadImage(
+        { ...DEFAULT_IMAGE_HOST_CONFIG, type: 'local' },
+        { name: 'a.png', mime: 'image/png', bytes: Uint8Array.from([1]) },
+        () => undefined
+      )
+    ).rejects.toThrow('cloud image host is not configured')
   })
 })

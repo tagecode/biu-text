@@ -13,6 +13,7 @@ import {
   findDocumentByPath,
   isDocumentDirty,
   isPathWithin,
+  moveDocument as moveDocumentInList,
   neighborDocumentId,
   nextDocumentId,
   patchDocument,
@@ -54,6 +55,8 @@ export interface UseDocumentsResult {
   setCursor: (docId: string, line: number, col: number) => void
   activate: (docId: string) => void
   activateIndex: (index: number) => void
+  /** 拖拽排序：把标签插到移动前数组的 insertIndex 位置 */
+  moveDocument: (docId: string, insertIndex: number) => void
   newDocument: () => void
   openFile: () => Promise<void>
   openPath: (path: string) => Promise<void>
@@ -179,6 +182,17 @@ export function useDocuments(): UseDocumentsResult {
       if (target) activate(target.id)
     },
     [activate]
+  )
+
+  /** 拖拽排序只改数组顺序，活动标签与各编辑器实例保持不变 */
+  const moveDocument = useCallback(
+    (docId: string, insertIndex: number) => {
+      commit((prev) => {
+        const documents = moveDocumentInList(prev.documents, docId, insertIndex)
+        return documents ? { ...prev, documents } : prev
+      })
+    },
+    [commit]
   )
 
   // ─── 新建 / 打开 ───────────────────────────────────────────────
@@ -413,6 +427,7 @@ export function useDocuments(): UseDocumentsResult {
     setCursor,
     activate,
     activateIndex,
+    moveDocument,
     newDocument,
     openFile,
     openPath,

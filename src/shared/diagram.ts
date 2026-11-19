@@ -16,7 +16,18 @@ export const MERMAID_SNIPPET = '```mermaid\nflowchart TD\n  A[Start] --> B[End]\
 
 const DIAGRAM_LANGS = new Set(['mermaid', 'chartjs', 'dot', 'excalidraw'])
 
+/**
+ * 登记一种可预览的围栏语言。
+ *
+ * 插件在注册渲染器时调用；必须在文档渲染前完成登记，
+ * 否则 fenced code 会按普通代码块输出。
+ */
+export function registerDiagramLanguage(lang: string): void {
+  const normalized = lang.trim().toLowerCase()
+  if (normalized) DIAGRAM_LANGS.add(normalized)
+}
+
 /** 预览区会水合的围栏语言。新增一种图表时在这里登记，并提供对应渲染器。 */
 export function isDiagramLang(lang: string): boolean {
-  return DIAGRAM_LANGS.has(lang)
+  return DIAGRAM_LANGS.has(lang.trim().toLowerCase())
 }

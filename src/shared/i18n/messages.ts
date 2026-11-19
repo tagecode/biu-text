@@ -18,6 +18,7 @@ const zhCN = {
     saveAs: '另存为…',
     exportHtml: '导出 HTML…',
     exportPdf: '导出 PDF…',
+    imageHistory: '图片历史…',
     close: '关闭',
     edit: '编辑',
     find: '查找',
@@ -162,7 +163,8 @@ const zhCN = {
   },
   editor: {
     linkText: '链接文字',
-    placeholder: '开始书写…'
+    placeholder: '开始书写…',
+    inlineTable: '表格，点击单元格进入编辑'
   },
   diagram: {
     renderFailed: '图表渲染失败',
@@ -223,6 +225,20 @@ const zhCN = {
     tooLarge: '图片超过 {{size}} 上限',
     saveFailed: '图床设置保存失败',
     readFailed: '读取图床设置失败'
+  },
+  imageHistory: {
+    title: '上传历史',
+    empty: '还没有上传记录',
+    emptyHint: '使用 GitHub 或自定义图床插入图片后，这里会保留最近 50 张。',
+    loading: '正在读取…',
+    copyUrl: '复制 URL',
+    copyMarkdown: '复制 Markdown',
+    delete: '删除记录',
+    copied: '已复制到剪贴板',
+    loadFailed: '读取上传历史失败',
+    deleteFailed: '删除记录失败',
+    close: '关闭上传历史',
+    actions: '更多操作'
   },
   welcome: {
     document: `# 欢迎使用 BiuText
@@ -286,6 +302,7 @@ const enUS = {
     saveAs: 'Save As…',
     exportHtml: 'Export HTML…',
     exportPdf: 'Export PDF…',
+    imageHistory: 'Image History…',
     close: 'Close',
     edit: 'Edit',
     find: 'Find',
@@ -430,7 +447,8 @@ const enUS = {
   },
   editor: {
     linkText: 'link text',
-    placeholder: 'Start writing…'
+    placeholder: 'Start writing…',
+    inlineTable: 'Table — click a cell to edit'
   },
   diagram: {
     renderFailed: 'Diagram failed to render',
@@ -491,6 +509,20 @@ const enUS = {
     tooLarge: 'Image exceeds the {{size}} limit',
     saveFailed: "Couldn't Save Image Host Settings",
     readFailed: "Couldn't Read Image Host Settings"
+  },
+  imageHistory: {
+    title: 'Upload history',
+    empty: 'No uploads yet',
+    emptyHint: 'Images uploaded to GitHub or a custom host appear here, up to 50 recent items.',
+    loading: 'Loading…',
+    copyUrl: 'Copy URL',
+    copyMarkdown: 'Copy Markdown',
+    delete: 'Delete record',
+    copied: 'Copied to clipboard',
+    loadFailed: "Couldn't load upload history",
+    deleteFailed: "Couldn't delete the record",
+    close: 'Close upload history',
+    actions: 'More actions'
   },
   welcome: {
     document: `# Welcome to BiuText
@@ -554,6 +586,7 @@ const zhTW = {
     saveAs: '另存新檔…',
     exportHtml: '匯出 HTML…',
     exportPdf: '匯出 PDF…',
+    imageHistory: '圖片歷史…',
     close: '關閉',
     edit: '編輯',
     find: '尋找',
@@ -698,7 +731,8 @@ const zhTW = {
   },
   editor: {
     linkText: '連結文字',
-    placeholder: '開始書寫…'
+    placeholder: '開始書寫…',
+    inlineTable: '表格，點擊儲存格進入編輯'
   },
   diagram: {
     renderFailed: '圖表渲染失敗',
@@ -759,6 +793,20 @@ const zhTW = {
     tooLarge: '圖片超過 {{size}} 上限',
     saveFailed: '圖床設定儲存失敗',
     readFailed: '讀取圖床設定失敗'
+  },
+  imageHistory: {
+    title: '上傳歷史',
+    empty: '還沒有上傳記錄',
+    emptyHint: '使用 GitHub 或自訂圖床插入圖片後，這裡會保留最近 50 張。',
+    loading: '正在讀取…',
+    copyUrl: '複製 URL',
+    copyMarkdown: '複製 Markdown',
+    delete: '刪除記錄',
+    copied: '已複製到剪貼簿',
+    loadFailed: '讀取上傳歷史失敗',
+    deleteFailed: '刪除記錄失敗',
+    close: '關閉上傳歷史',
+    actions: '更多操作'
   },
   welcome: {
     document: `# 歡迎使用 BiuText

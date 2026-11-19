@@ -24,6 +24,7 @@ export interface AppMenuActions {
   exportPdf: () => void
   find: () => void
   replace: () => void
+  imageHistory: () => void
 }
 
 export interface AppMenuTemplateOptions {
@@ -92,6 +93,8 @@ export function createAppMenuTemplate(options: AppMenuTemplateOptions): AppMenuI
         { type: 'separator' },
         { label: t('menu.exportHtml'), accelerator: 'CmdOrCtrl+Shift+E', click: actions.exportHtml },
         { label: t('menu.exportPdf'), accelerator: 'CmdOrCtrl+Shift+P', click: actions.exportPdf },
+        { type: 'separator' },
+        { label: t('menu.imageHistory'), click: actions.imageHistory },
         { type: 'separator' },
         isMac ? { role: 'close', label: t('menu.close') } : { role: 'quit', label: t('menu.quit', { appName }) }
       ]

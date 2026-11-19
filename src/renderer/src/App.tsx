@@ -26,6 +26,7 @@ import { useImageHost } from '@/hooks/useImageHost'
 import { useImageUpload } from '@/hooks/useImageUpload'
 import { ExportPreview, type ExportIntent } from '@/components/ExportPreview'
 import { ExcalidrawEditor } from '@/components/ExcalidrawEditor'
+import { ImageHistoryDialog } from '@/components/ImageHistory'
 import { insertImageLinks } from '@/lib/image-insert'
 import { insertBlock } from '@/lib/block-insert'
 import { MERMAID_SNIPPET } from '@shared/diagram'
@@ -128,6 +129,7 @@ function App() {
     setCursor,
     activate,
     activateIndex,
+    moveDocument,
     newDocument,
     openFile,
     openPath,
@@ -205,6 +207,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [exportIntent, setExportIntent] = useState<ExportIntent | null>(null)
   const [drawingOpen, setDrawingOpen] = useState(false)
+  const [imageHistoryOpen, setImageHistoryOpen] = useState(false)
   // 启动时先收起：等恢复出上次的文件夹（或用户主动打开/切换）再显示，
   // 否则会出现一个没有文件夹的空侧边栏
   const [sidebarVisible, setSidebarVisible] = useState(false)
@@ -434,11 +437,15 @@ function App() {
       const view = activeView()
       if (view) openReplacePanel(view)
     })
+    const unsubImageHistory = window.fileAPI.onMenuImageHistory(() => {
+      setImageHistoryOpen(true)
+    })
     return () => {
       unsubExportHtml()
       unsubExportPdf()
       unsubFind()
       unsubReplace()
+      unsubImageHistory()
     }
   }, [handleExportHtml, handleExportPdf, activeView])
 
@@ -503,6 +510,7 @@ function App() {
               onActivate={handleActivateTab}
               onClose={handleCloseTab}
               onNew={newDocument}
+              onMove={moveDocument}
             />
 
             <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden">
@@ -623,6 +631,7 @@ function App() {
           onClose={() => setDrawingOpen(false)}
           onInsert={handleInsertDrawing}
         />
+        <ImageHistoryDialog open={imageHistoryOpen} onClose={() => setImageHistoryOpen(false)} />
         <Toaster />
         <UploadIndicator />
       </div>

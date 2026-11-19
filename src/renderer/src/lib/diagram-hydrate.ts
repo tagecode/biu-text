@@ -143,7 +143,7 @@ export async function hydrateDiagrams(
   }
 }
 
-type DiagramRenderer = (
+export type DiagramRenderer = (
   host: HTMLElement,
   block: DiagramBlock,
   theme: Theme,
@@ -151,25 +151,41 @@ type DiagramRenderer = (
   rasterize: boolean
 ) => Promise<void>
 
-const diagramRenderers: Record<string, DiagramRenderer> = {
-  mermaid: async (host, block, theme, signal) => {
-    const svg = await renderDiagramSvg(block, theme)
-    if (signal.aborted) return
-    mountSvg(host, svg)
-  },
-  chartjs: renderChartDiagram,
-  dot: async (host, block, theme, signal) => {
-    const svg = await renderGraphvizSvg(block, theme)
-    if (signal.aborted) return
-    mountSvg(host, svg)
-  },
-  excalidraw: async (host, block, theme, signal) => {
-    const svg = await renderExcalidrawSvg(block, theme)
-    if (signal.aborted) return
-    mountSvg(host, svg)
-  }
+const diagramRenderers = new Map<string, DiagramRenderer>()
+
+/**
+ * 注册自定义图表渲染器。
+ *
+ * 内置的 mermaid/chartjs/dot/excalidraw 也在启动时走这里；
+ * 插件只需调用本函数（并确保 `registerDiagramLanguage` 已登记语言）。
+ */
+export function registerDiagramRenderer(lang: string, renderer: DiagramRenderer): void {
+  const normalized = lang.trim().toLowerCase()
+  if (!normalized) return
+  diagramRenderers.set(normalized, renderer)
 }
 
-function getDiagramRenderer(lang: string): DiagramRenderer | undefined {
-  return diagramRenderers[lang]
+export function getDiagramRenderer(lang: string): DiagramRenderer | undefined {
+  return diagramRenderers.get(lang.trim().toLowerCase())
 }
+
+export function listDiagramRenderers(): string[] {
+  return Array.from(diagramRenderers.keys())
+}
+
+registerDiagramRenderer('mermaid', async (host, block, theme, signal) => {
+  const svg = await renderDiagramSvg(block, theme)
+  if (signal.aborted) return
+  mountSvg(host, svg)
+})
+registerDiagramRenderer('chartjs', renderChartDiagram)
+registerDiagramRenderer('dot', async (host, block, theme, signal) => {
+  const svg = await renderGraphvizSvg(block, theme)
+  if (signal.aborted) return
+  mountSvg(host, svg)
+})
+registerDiagramRenderer('excalidraw', async (host, block, theme, signal) => {
+  const svg = await renderExcalidrawSvg(block, theme)
+  if (signal.aborted) return
+  mountSvg(host, svg)
+})

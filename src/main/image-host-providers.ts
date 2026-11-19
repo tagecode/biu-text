@@ -1,4 +1,9 @@
-import { isSecureEndpoint, pickJsonPath, type ImageHostConfig } from '../shared/image-host'
+import {
+  isSecureEndpoint,
+  pickJsonPath,
+  type ImageHostConfig,
+  type ImageHostType
+} from '../shared/image-host'
 import { cloudImageName } from './image-save'
 import { sendBuffer } from './http-upload'
 
@@ -14,6 +19,37 @@ export interface UploadResult {
 }
 
 export type ProgressReporter = (loaded: number, total: number) => void
+
+/**
+ * 图床插件接口：实现 `upload` 即可接入一种新的云端存储。
+ *
+ * 内置的 GitHub / 自定义 HTTP 也走同一张注册表，第三方插件因此不必改
+ * `uploadImage` 的 switch；`test` 可选，未实现时「测试连接」会提示不支持。
+ */
+export interface ImageHostProvider {
+  upload(
+    config: ImageHostConfig,
+    input: UploadInput,
+    onProgress: ProgressReporter
+  ): Promise<UploadResult>
+  test?(config: ImageHostConfig): Promise<UploadResult>
+}
+
+const providers = new Map<ImageHostType, ImageHostProvider>()
+
+/** 注册（或覆盖）某种图床类型的实现；主进程启动早期调用 */
+export function registerImageHostProvider(type: ImageHostType, provider: ImageHostProvider): void {
+  providers.set(type, provider)
+}
+
+export function getImageHostProvider(type: ImageHostType): ImageHostProvider | undefined {
+  return providers.get(type)
+}
+
+/** 已注册的类型，供设置面板/插件诊断展示 */
+export function listImageHostProviders(): ImageHostType[] {
+  return Array.from(providers.keys())
+}
 
 /** multipart 请求体，字段名与文件名来自配置 */
 export function buildMultipartBody(
@@ -157,44 +193,48 @@ export async function uploadImage(
   input: UploadInput,
   onProgress: ProgressReporter
 ): Promise<UploadResult> {
-  if (config.type === 'github') return uploadToGithub(config, input, onProgress)
-  if (config.type === 'custom') return uploadToCustom(config, input, onProgress)
+  const provider = providers.get(config.type)
+  if (provider) return provider.upload(config, input, onProgress)
   throw new Error('cloud image host is not configured')
+}
+
+async function testGithub(config: ImageHostConfig): Promise<UploadResult> {
+  if (!config.github.repo.includes('/') || !config.github.token) throw new Error('repo and token required')
+  const res = await sendBuffer(`https://api.github.com/repos/${config.github.repo}`, {
+    method: 'GET',
+    headers: {
+      authorization: `Bearer ${config.github.token}`,
+      accept: 'application/vnd.github+json',
+      'user-agent': 'BiuText'
+    },
+    body: Buffer.alloc(0)
+  })
+  if (res.status < 200 || res.status >= 300) throw statusError('GitHub', res.status, res.text)
+  return { url: config.github.repo, fileName: '' }
+}
+
+async function testCustom(config: ImageHostConfig): Promise<UploadResult> {
+  return uploadToCustom(
+    config,
+    {
+      name: 'biu-text-connection-test.png',
+      mime: 'image/png',
+      bytes: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64'
+      )
+    },
+    () => {}
+  )
 }
 
 /** 测试连接：GitHub 查仓库可访问，自定义图床直接传一张 1×1 透明 PNG */
 export async function testImageHost(config: ImageHostConfig): Promise<UploadResult> {
-  const noop: ProgressReporter = () => {}
-
-  if (config.type === 'github') {
-    if (!config.github.repo.includes('/') || !config.github.token) throw new Error('repo and token required')
-    const res = await sendBuffer(`https://api.github.com/repos/${config.github.repo}`, {
-      method: 'GET',
-      headers: {
-        authorization: `Bearer ${config.github.token}`,
-        accept: 'application/vnd.github+json',
-        'user-agent': 'BiuText'
-      },
-      body: Buffer.alloc(0)
-    })
-    if (res.status < 200 || res.status >= 300) throw statusError('GitHub', res.status, res.text)
-    return { url: config.github.repo, fileName: '' }
-  }
-
-  if (config.type === 'custom') {
-    return uploadToCustom(
-      config,
-      {
-        name: 'biu-text-connection-test.png',
-        mime: 'image/png',
-        bytes: Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-          'base64'
-        )
-      },
-      noop
-    )
-  }
-
-  throw new Error('no cloud host configured')
+  const provider = providers.get(config.type)
+  if (!provider) throw new Error('no cloud host configured')
+  if (!provider.test) throw new Error('this image host does not support connection tests')
+  return provider.test(config)
 }
+
+registerImageHostProvider('github', { upload: uploadToGithub, test: testGithub })
+registerImageHostProvider('custom', { upload: uploadToCustom, test: testCustom })

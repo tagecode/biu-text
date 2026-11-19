@@ -1,7 +1,9 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { clipboard, contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppLanguage } from '../shared/i18n/types'
 import type { ImageFileInput } from '../shared/image-input'
+import type { ImageHistoryEntry } from '../shared/image-history'
+import type { LinkPreview } from '../shared/link-preview'
 import type { NotificationPayload } from '../shared/notification'
 import type {
   WorkspaceDeleteResult,
@@ -95,6 +97,12 @@ const fileAPI = {
     const handler = () => cb()
     ipcRenderer.on(IPC.MENU_REPLACE, handler)
     return () => ipcRenderer.removeListener(IPC.MENU_REPLACE, handler)
+  },
+
+  onMenuImageHistory: (cb: () => void): UnsubFn => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.MENU_IMAGE_HISTORY, handler)
+    return () => ipcRenderer.removeListener(IPC.MENU_IMAGE_HISTORY, handler)
   }
 }
 
@@ -148,11 +156,25 @@ const imageAPI = {
   upload: (request: ImageUploadRequest): Promise<ImageUploadResult> =>
     ipcRenderer.invoke(IPC.IMAGE_UPLOAD, request),
 
+  getHistory: (): Promise<ImageHistoryEntry[]> => ipcRenderer.invoke(IPC.IMAGE_HISTORY_LIST),
+
+  removeHistory: (id: string): Promise<ImageHistoryEntry[]> =>
+    ipcRenderer.invoke(IPC.IMAGE_HISTORY_REMOVE, id),
+
+  showHistoryMenu: (): Promise<'url' | 'markdown' | 'delete' | null> =>
+    ipcRenderer.invoke(IPC.IMAGE_HISTORY_MENU),
+
   onUploadProgress: (cb: (progress: ImageUploadProgress) => void): UnsubFn => {
     const handler = (_: Electron.IpcRendererEvent, progress: ImageUploadProgress) => cb(progress)
     ipcRenderer.on(IPC.IMAGE_UPLOAD_PROGRESS, handler)
     return () => ipcRenderer.removeListener(IPC.IMAGE_UPLOAD_PROGRESS, handler)
   }
+}
+
+const linkAPI = {
+  /** 抓取链接的 Open Graph 信息；失败返回 null，渲染层不显示卡片 */
+  fetchPreview: (url: string): Promise<LinkPreview | null> =>
+    ipcRenderer.invoke(IPC.LINK_PREVIEW_FETCH, url)
 }
 
 const workspaceAPI = {
@@ -199,6 +221,10 @@ const windowAPI = {
 
   cancelClose: (): void => {
     ipcRenderer.send(IPC.APP_CLOSE_CANCELLED)
+  },
+
+  writeClipboard: (text: string): void => {
+    clipboard.writeText(text)
   }
 }
 
@@ -211,6 +237,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('loginAPI', loginAPI)
     contextBridge.exposeInMainWorld('imageAPI', imageAPI)
     contextBridge.exposeInMainWorld('workspaceAPI', workspaceAPI)
+    contextBridge.exposeInMainWorld('linkAPI', linkAPI)
   } catch (error) {
     console.error(error)
   }
@@ -229,4 +256,6 @@ if (process.contextIsolated) {
   window.imageAPI = imageAPI
   // @ts-expect-error preload 的 Node 类型环境没有 DOM window
   window.workspaceAPI = workspaceAPI
+  // @ts-expect-error preload 的 Node 类型环境没有 DOM window
+  window.linkAPI = linkAPI
 }

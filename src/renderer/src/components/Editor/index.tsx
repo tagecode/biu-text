@@ -15,6 +15,7 @@ import { openReplacePanel } from '@/lib/search-panel'
 import { insertImageLinks } from '@/lib/image-insert'
 import { inlineImages } from '@/lib/inline-image'
 import { inlineDiagrams } from '@/lib/inline-diagram'
+import { inlineTables } from '@/lib/inline-table'
 import type { EditorFontFamily } from '@/hooks/useAppearanceSettings'
 import type { Theme } from '@/hooks/useTheme'
 
@@ -168,7 +169,8 @@ export function Editor({
               preview: i18n.t('diagram.showPreview'),
               renderFailed: i18n.t('diagram.renderFailed')
             }
-          })
+          }),
+          inlineTables({ label: i18n.t('editor.inlineTable') })
         ]
       : [])
   ], [tabWidth, language, inlineRender, documentPath, theme])

@@ -11,6 +11,7 @@ export const IPC = {
   MENU_EXPORT_PDF: 'menu:export-pdf',
   MENU_FIND: 'menu:find',
   MENU_REPLACE: 'menu:replace',
+  MENU_IMAGE_HISTORY: 'menu:image-history',
 
   // 渲染进程 → 主进程（invoke / handle）
   FILE_OPEN_DIALOG: 'file:open-dialog',
@@ -48,6 +49,12 @@ export const IPC = {
   IMAGE_HOST_TEST: 'image-host:test',
   IMAGE_UPLOAD: 'image:upload',
   IMAGE_UPLOAD_PROGRESS: 'image:upload-progress',
+  IMAGE_HISTORY_LIST: 'image-history:list',
+  IMAGE_HISTORY_REMOVE: 'image-history:remove',
+  IMAGE_HISTORY_MENU: 'image-history:menu',
+
+  // 链接预览（Open Graph）
+  LINK_PREVIEW_FETCH: 'link-preview:fetch',
 
   // 工作区（文件树）
   WORKSPACE_OPEN: 'workspace:open',

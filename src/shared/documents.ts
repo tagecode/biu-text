@@ -205,3 +205,27 @@ export function removeDocumentsUnder(state: DocumentsState, target: string): Doc
 export function activeDocumentOf(state: DocumentsState): TabDocument {
   return findDocumentById(state.documents, state.activeId) ?? state.documents[0]
 }
+
+/**
+ * 拖拽排序：把 `docId` 插到**移动前**数组的 `insertIndex` 位置（0..length）。
+ *
+ * 插入下标按移动前的数组计算，避免「拖到邻居左侧」被算成移动一格：
+ * `[a,b,c]` 把 b 拖到 c 左边（insertIndex=2）应当保持不变，
+ * 换算成移除后的下标是 1。没有发生变化时返回 null。
+ */
+export function moveDocument(
+  documents: readonly TabDocument[],
+  docId: string,
+  insertIndex: number
+): TabDocument[] | null {
+  const from = documents.findIndex((document) => document.id === docId)
+  if (from === -1) return null
+  const bounded = Math.max(0, Math.min(insertIndex, documents.length))
+  const target = bounded > from ? bounded - 1 : bounded
+  if (target === from) return null
+
+  const next = documents.slice()
+  const [moved] = next.splice(from, 1)
+  next.splice(target, 0, moved)
+  return next
+}

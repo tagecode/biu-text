@@ -34,7 +34,8 @@ window.fileAPI = {
   },
   onMenuExportPdf: () => unsub(),
   onMenuFind: () => unsub(),
-  onMenuReplace: () => unsub()
+  onMenuReplace: () => unsub(),
+  onMenuImageHistory: () => unsub()
 }
 
 window.windowAPI = {
@@ -44,7 +45,8 @@ window.windowAPI = {
   onWillClose: () => unsub(),
   onNotify: () => unsub(),
   confirmClose: () => undefined,
-  cancelClose: () => undefined
+  cancelClose: () => undefined,
+  writeClipboard: () => undefined
 }
 
 window.themeAPI = {
@@ -71,6 +73,9 @@ window.imageAPI = {
   setHostConfig: async (view) => view,
   testHost: async () => ({ ok: true }),
   upload: async () => ({ ok: false, error: 'unused' }),
+  getHistory: async () => [],
+  removeHistory: async () => [],
+  showHistoryMenu: async () => null,
   onUploadProgress: () => unsub()
 }
 

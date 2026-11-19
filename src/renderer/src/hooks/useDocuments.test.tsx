@@ -105,6 +105,24 @@ describe('useDocuments', () => {
     expect(result.current.documents.some((doc) => doc.id === firstId)).toBe(true)
   })
 
+  it('拖拽排序只改顺序，不改变活动标签', async () => {
+    const { result } = renderHook(() => useDocuments())
+
+    await act(async () => {
+      await result.current.openPath('/notes/a.md')
+    })
+    await act(async () => {
+      await result.current.openPath('/notes/b.md')
+    })
+    const ids = result.current.documents.map((doc) => doc.id)
+    expect(ids).toHaveLength(3)
+
+    act(() => result.current.moveDocument(ids[2], 0))
+
+    expect(result.current.documents.map((doc) => doc.id)).toEqual([ids[2], ids[0], ids[1]])
+    expect(result.current.activeId).toBe(ids[2])
+  })
+
   it('打开文件新增标签，同一路径只保留一个标签', async () => {
     const { result } = renderHook(() => useDocuments())
 

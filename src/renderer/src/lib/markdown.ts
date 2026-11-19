@@ -124,3 +124,8 @@ export interface MarkdownRenderEnv {
 export function renderMarkdown(content: string, env: MarkdownRenderEnv = {}): string {
   return md.render(content, env)
 }
+
+/** 表格单元格等只允许行内标记的场景；调用方仍需 sanitize 后再写入 DOM */
+export function renderMarkdownInline(content: string): string {
+  return md.renderInline(content)
+}

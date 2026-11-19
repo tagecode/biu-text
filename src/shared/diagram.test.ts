@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diagramCacheKey, isDiagramLang, type DiagramBlock } from './diagram'
+import { diagramCacheKey, isDiagramLang, registerDiagramLanguage, type DiagramBlock } from './diagram'
 
 const block: DiagramBlock = { id: 'd0', lang: 'mermaid', code: 'graph TD; A-->B' }
 
@@ -33,5 +33,13 @@ describe('isDiagramLang', () => {
     expect(isDiagramLang('dot')).toBe(true)
     expect(isDiagramLang('javascript')).toBe(false)
     expect(isDiagramLang('')).toBe(false)
+  })
+
+  it('lets plugins register extra languages, case-insensitively', () => {
+    registerDiagramLanguage('PlantUML')
+    expect(isDiagramLang('plantuml')).toBe(true)
+    expect(isDiagramLang('PLANTUML')).toBe(true)
+    registerDiagramLanguage('   ')
+    expect(isDiagramLang('   ')).toBe(false)
   })
 })
