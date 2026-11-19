@@ -8,10 +8,11 @@
  * 因此不是按空行无脑切，而是只在**可证明安全**的边界上切：
  *
  * - 空行就是候选边界——Markdown 的块大多以空行分隔；
- * - 围栏代码块内部不切（内部空行属于代码）；
- * - 空行之后是缩进行时不切（可能是列表项续行或缩进代码）；
- * - 空行之前是列表项、缩进行或缩进围栏收尾时不切（可能仍在同一个列表项里，
- *   松/紧列表会因此产生 `<li><p>` 与 `<li>` 的差异）；
+ * - 围栏代码块内部不切（内部空行属于代码）。围栏允许缩进 1–3 个空格，
+ *   所以只有行首 Tab 或 4 个以上空格才算缩进代码，不能看到空格就当成缩进；
+ * - 空行之后的行以空白开头时不切（可能是列表续行、嵌套列表或缩进代码）；
+ * - 空行之前是列表项、列表项的惰性续行、缩进代码或缩进围栏收尾时不切
+ *   （可能仍在同一个列表项里，松/紧列表会因此产生 `<li><p>` 与 `<li>` 的差异）；
  * - 引用定义（`[foo]: url`）与脚注定义（`[^1]: ...`）作用域是整篇文档，出现即放弃分段；
  * - 以 `<` 开头的行可能是跨空行的原始 HTML 块，同样放弃分段。
  *
@@ -55,6 +56,8 @@ const KIND_INDENTED = 2
 const KIND_FENCE = 3
 const KIND_ORDERED = 4
 const KIND_UNORDERED = 5
+/** 列表项的惰性续行（`- item` 后面不带缩进的普通文字行） */
+const KIND_LAZY_LIST = 6
 
 type BlockKind =
   | typeof KIND_OTHER
@@ -63,6 +66,7 @@ type BlockKind =
   | typeof KIND_FENCE
   | typeof KIND_ORDERED
   | typeof KIND_UNORDERED
+  | typeof KIND_LAZY_LIST
 
 const CHAR_TAB = 9
 const CHAR_SPACE = 32
@@ -115,8 +119,37 @@ function isSpaceLike(code: number): boolean {
   return code === CHAR_SPACE || code === CHAR_TAB
 }
 
+/** 行首是否有空白（用于判断收尾围栏是否缩进在列表项里） */
 function lineIsIndented(content: string, start: number, end: number): boolean {
   return start < end && isSpaceLike(content.charCodeAt(start))
+}
+
+/**
+ * 行首带空白（不区分 1 个还是 4 个空格）。
+ *
+ * 缩进的行可能是列表项的续行、嵌套列表或缩进代码——都属于"上一块的容器还没结束"，
+ * 因此在它前面不切。这里宁可多合并一块，也不能把列表从中间切断。
+ */
+function startsWithSpace(content: string, position: number): boolean {
+  return position < content.length && isSpaceLike(content.charCodeAt(position))
+}
+
+/**
+ * CommonMark 的缩进代码：行首是 Tab，或 4 个以上空格。
+ *
+ * 围栏、引用定义、脚注定义、原始 HTML 都允许缩进 1–3 个空格，
+ * 所以不能看到行首空格就当作缩进代码，否则这些构造会漏检。
+ */
+function lineStartsIndentedCode(content: string, start: number, end: number): boolean {
+  if (start >= end) return false
+  if (content.charCodeAt(start) === CHAR_TAB) return true
+  let spaces = 0
+  for (let index = start; index < end; index++) {
+    if (content.charCodeAt(index) !== CHAR_SPACE) break
+    spaces++
+    if (spaces >= 4) return true
+  }
+  return false
 }
 
 function lineIsBlank(content: string, start: number, end: number): boolean {
@@ -203,7 +236,7 @@ function scanLine(content: string, start: number, end: number): LineScan {
     return scan
   }
 
-  if (lineIsIndented(content, start, end)) {
+  if (lineStartsIndentedCode(content, start, end)) {
     scan.kind = KIND_INDENTED
     return scan
   }
@@ -261,7 +294,8 @@ function isOpenBlockLike(kind: BlockKind): boolean {
     kind === KIND_INDENTED ||
     kind === KIND_FENCE ||
     kind === KIND_ORDERED ||
-    kind === KIND_UNORDERED
+    kind === KIND_UNORDERED ||
+    kind === KIND_LAZY_LIST
   )
 }
 
@@ -332,6 +366,8 @@ function scanRegion(content: string, regionStart: number, regionEnd: number): Re
   let fenceChar = 0
   let fenceLength = 0
   let lastKind: BlockKind = KIND_BLANK
+  /** 上一物理行的类型：用来识别列表项的惰性续行 */
+  let previousKind: BlockKind = KIND_BLANK
   let position = regionStart
 
   const markContent = (start: number, end: number): void => {
@@ -375,6 +411,7 @@ function scanRegion(content: string, regionStart: number, regionEnd: number): Re
         }
       }
       markContent(position, lineEnd)
+      previousKind = KIND_FENCE
       position = nextPosition
       continue
     }
@@ -399,10 +436,11 @@ function scanRegion(content: string, regionStart: number, regionEnd: number): Re
 
       if (nextStart === -1) break
 
-      if (boundaryAllows(lastKind, nextKind)) {
+      if (!startsWithSpace(content, nextStart) && boundaryAllows(lastKind, nextKind)) {
         flush()
         lastKind = KIND_BLANK
       }
+      previousKind = KIND_BLANK
       position = nextStart
       continue
     }
@@ -410,8 +448,17 @@ function scanRegion(content: string, regionStart: number, regionEnd: number): Re
     if (scan.referenceDefinition) reasons.push(`reference definition near offset ${position}`)
     if (scan.rawHtml) reasons.push(`raw html near offset ${position}`)
 
+    // 列表项后面不带缩进的普通文字行是「惰性续行」，仍属于这个列表项；
+    // 这里把它记成未闭合类型，避免下一个空行被当成安全的切分点。
+    const lazyList: boolean =
+      scan.kind === KIND_OTHER &&
+      (previousKind === KIND_ORDERED ||
+        previousKind === KIND_UNORDERED ||
+        previousKind === KIND_LAZY_LIST)
+
     markContent(position, lineEnd)
-    lastKind = scan.kind
+    lastKind = lazyList ? KIND_LAZY_LIST : scan.kind
+    previousKind = lastKind
     position = nextPosition
   }
 
@@ -609,11 +656,13 @@ export class IncrementalSplitter {
   ): boolean {
     const previousIndex = i0 - 1
     const hasPrevious = previousIndex >= 0
+    const allowsSeam = (kind: BlockKind, start: number): boolean =>
+      start < 0 || (!startsWithSpace(next, start) && boundaryAllows(kind, lineKindAt(next, start)))
 
     if (hasPrevious) {
       const previousEndKind = this.endKinds[previousIndex]
       const followingStart = middle.length > 0 ? middle[0].start : back.length > 0 ? back[0].start : -1
-      if (followingStart >= 0 && !boundaryAllows(previousEndKind, lineKindAt(next, followingStart))) {
+      if (followingStart >= 0 && !allowsSeam(previousEndKind, followingStart)) {
         return false
       }
     }
@@ -621,10 +670,10 @@ export class IncrementalSplitter {
     if (back.length > 0) {
       if (middle.length > 0) {
         const lastMiddleKind = middleEndKinds[middleEndKinds.length - 1]
-        if (!boundaryAllows(lastMiddleKind, lineKindAt(next, back[0].start))) return false
+        if (!allowsSeam(lastMiddleKind, back[0].start)) return false
       } else if (hasPrevious) {
         // 窗口被改空：等价于「上一块」直接接「下一块」
-        if (!boundaryAllows(this.endKinds[previousIndex], lineKindAt(next, back[0].start))) return false
+        if (!allowsSeam(this.endKinds[previousIndex], back[0].start)) return false
       }
     }
 

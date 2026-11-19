@@ -17,7 +17,10 @@ export interface WorkspaceEntry {
 export interface WorkspaceSnapshot {
   root: string
   entries: WorkspaceEntry[]
-  /** 被忽略的条目数（隐藏文件、非 Markdown、被剪掉的目录等） */
+  /**
+   * 被忽略的条目数（隐藏文件、非 Markdown、被剪掉的目录、超限/超深等）。
+   * 当前只在主进程与测试里使用，界面暂不展示（数字混合了多种原因，直接展示会误导）。
+   */
   skipped: number
 }
 

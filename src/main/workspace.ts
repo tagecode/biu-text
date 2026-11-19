@@ -18,32 +18,36 @@ import {
 /**
  * 把目录读成一棵只含 Markdown 文件的树。
  *
+ * - 根目录不存在 / 不是目录 / 没有读权限时返回 `null`，让调用方能把
+ *   「空文件夹」和「打不开」区分开（PRD：上次的文件夹没了要清掉记录并收起侧边栏）；
  * - 隐藏文件/目录、非 Markdown 文件、构建产物目录都跳过；
  * - 不含 Markdown 的目录会被剪掉（否则树里全是空文件夹）；
  * - 条目总数与递归深度都有上限，误开巨大目录时宁可少列也不要卡死界面。
  */
-export async function readWorkspace(root: string): Promise<WorkspaceSnapshot> {
+export async function readWorkspace(root: string): Promise<WorkspaceSnapshot | null> {
   const absoluteRoot = resolve(root)
+  let rootEntries: Dirent[]
+  try {
+    rootEntries = await readdir(absoluteRoot, { withFileTypes: true })
+  } catch {
+    return null
+  }
+
   let listed = 0
   let skipped = 0
 
-  const walk = async (directory: string, depth: number): Promise<WorkspaceEntry[]> => {
+  const walk = async (
+    directory: string,
+    directoryEntries: readonly Dirent[],
+    depth: number
+  ): Promise<WorkspaceEntry[]> => {
     if (depth > MAX_WORKSPACE_DEPTH) {
       skipped++
       return []
     }
 
-    let entries: Dirent[]
-    try {
-      entries = await readdir(directory, { withFileTypes: true })
-    } catch {
-      // 权限不足等情况：这个目录当空处理，不影响其它分支
-      skipped++
-      return []
-    }
-
     const collected: WorkspaceEntry[] = []
-    for (const entry of entries) {
+    for (const entry of directoryEntries) {
       if (listed >= MAX_WORKSPACE_ENTRIES) {
         skipped++
         continue
@@ -60,7 +64,15 @@ export async function readWorkspace(root: string): Promise<WorkspaceSnapshot> {
           skipped++
           continue
         }
-        const children = await walk(absolute, depth + 1)
+        let childrenEntries: Dirent[]
+        try {
+          childrenEntries = await readdir(absolute, { withFileTypes: true })
+        } catch {
+          // 子目录权限不足：跳过它，不影响其它分支
+          skipped++
+          continue
+        }
+        const children = await walk(absolute, childrenEntries, depth + 1)
         if (children.length === 0) {
           skipped++
           continue
@@ -82,7 +94,7 @@ export async function readWorkspace(root: string): Promise<WorkspaceSnapshot> {
     return collected.sort(compareWorkspaceEntries)
   }
 
-  const entries = await walk(absoluteRoot, 0)
+  const entries = await walk(absoluteRoot, rootEntries, 0)
   return { root: absoluteRoot, entries, skipped }
 }
 

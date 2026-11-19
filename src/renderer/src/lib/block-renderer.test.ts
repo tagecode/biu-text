@@ -2,6 +2,7 @@
 import '@/test/dom-polyfills'
 import { describe, expect, it } from 'vitest'
 import { BlockRenderer } from './block-renderer'
+import { applyBlocks } from './preview-dom'
 
 const DOC = 'C:/notes/a.md'
 
@@ -78,6 +79,46 @@ describe('BlockRenderer', () => {
     for (const block of result.blocks) {
       for (const diagram of block.diagrams) {
         expect(block.html).toContain(`data-diagram-id="${diagram.id}"`)
+      }
+    }
+  })
+
+  it('内容完全相同的块也各有唯一 key，重复应用不会打乱预览', () => {
+    const renderer = new BlockRenderer()
+    const content = 'AAA\n\nDUP\n\nDUP\n\nBBB\n'
+    const blocks = texts(renderer, content).blocks
+    expect(new Set(blocks.map((block) => block.key)).size).toBe(blocks.length)
+
+    const article = document.createElement('article')
+    const apply = (list: typeof blocks) =>
+      applyBlocks(article, list, new Set(list.map((block) => block.key)))
+    const paragraphs = () =>
+      Array.from(article.querySelectorAll('p')).map((element) => element.textContent)
+
+    apply(blocks)
+    expect(paragraphs()).toEqual(['AAA', 'DUP', 'DUP', 'BBB'])
+
+    // 同样的内容再应用一次：旧实现会在这里抛 NotFoundError 并把块搬到错误位置
+    expect(() => apply(blocks)).not.toThrow()
+    expect(paragraphs()).toEqual(['AAA', 'DUP', 'DUP', 'BBB'])
+
+    // 删掉重复块里的一个，剩下那个必须还在正确位置
+    const fewer = texts(renderer, 'AAA\n\nDUP\n\nBBB\n').blocks
+    apply(fewer)
+    expect(paragraphs()).toEqual(['AAA', 'DUP', 'BBB'])
+  })
+
+  it('内容相同的图表块也各有唯一图表 id', () => {
+    const renderer = new BlockRenderer()
+    const diagram = '```mermaid\ngraph TD\nA-->B\n```'
+    const result = texts(renderer, `${diagram}\n\n${diagram}`)
+    const ids = result.blocks.flatMap((block) => block.diagrams.map((item) => item.id))
+
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
+    for (const block of result.blocks) {
+      for (const item of block.diagrams) {
+        expect(block.html).toContain(`data-diagram-id="${item.id}"`)
       }
     }
   })

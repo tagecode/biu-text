@@ -1,9 +1,9 @@
 # BiuText 技术架构文档
 
-> **文档版本**：v1.0
-> **对应代码版本**：v1.0.0（`package.json`）
-> **日期**：2026-11-12
-> **状态**：现行架构说明 + v1.0–v1.1 演进设计
+> **文档版本**：v1.1
+> **对应代码版本**：v1.1.0（`package.json`）
+> **日期**：2026-11-19
+> **状态**：现行架构说明 + v1.0–v1.1 演进（v1.1.0 已发布）
 > **关联文档**：[产品需求文档（PRD）](./PRD.md)
 
 ---
@@ -583,15 +583,15 @@ requestAnimationFrame 接着渲染，首屏因此不会一次性阻塞主线程�
 
 | 关注点 | 做法 |
 |--------|------|
-| 切块（全量） | 只在**可证明安全**的空行边界切分：围栏代码块内部不切；空行后是缩进行不切；空行前是列表项/缩进行/缩进围栏收尾不切（松紧列表会因此产生 `<li><p>` 差异）；出现引用定义、脚注定义或以 `<` 开头的原始 HTML 行时**放弃分段**，整篇渲染 |
+| 切块（全量） | 只在**可证明安全**的空行边界切分：围栏代码块内部不切；空行后一行以空白开头时不切（可能是列表续行、嵌套列表或缩进代码）；空行前是列表项、列表项的**惰性续行**、缩进代码或缩进围栏收尾时不切（松紧列表会因此产生 `<li><p>` 差异）；出现引用定义、脚注定义或以 `<` 开头的原始 HTML 行时**放弃分段**，整篇渲染。缩进代码只认行首 Tab 或 ≥4 空格——围栏/引用定义/脚注/原始 HTML 都允许缩进 1–3 空格 |
 | 切块（增量） | `IncrementalSplitter` 记住上一次的块边界：先求新旧内容的公共前后缀（分块 `slice ===` 走 memcmp，比逐字符快数倍），定位改动落在哪个块，只对「该块 ± 1 个邻居」的窗口重新扫描，然后**重新校验窗口两侧的接缝**（用与全量扫描完全相同的 `boundaryAllows` 规则），接缝不成立就扩大窗口重试，最坏退回整篇重切。围栏状态可以重新起算，因为窗口起点一定是合法块边界（围栏已闭合） |
-| 正确性 | 硬约束是「逐块拼接 === 整篇渲染」逐字节相同。`markdown-blocks.test.ts` 用 22 条语料 + PRD.md / Arch.md 两篇真实文档比对字节结果；另有一条**随机编辑性质测试**：对两篇真实文档连续施加 40 次随机插入/删除，每步都要求增量切分结果与「从头切一遍」逐块相同，并断言增量路径命中率 > 70%（防止性质测试悄悄退化成每次全量） |
-| 缓存键 | `b<内容 FNV-1a>-<长度>-<上下文哈希>`；上下文包含文档路径（影响图片地址改写），所以换文档不会命中旧 HTML。key 用「对区间做哈希」，命中时连字符串切片都不做 |
-| 缓存容量 | 上限 600 块，按插入顺序淘汰，但绝不淘汰本次用到的块 |
+| 正确性 | 硬约束是「逐块拼接 === 整篇渲染」逐字节相同。`markdown-blocks.test.ts` 用语料（含缩进围栏/引用/脚注/HTML、列表惰性续行）+ PRD.md / Arch.md 两篇真实文档比对字节结果；另有一条**随机编辑性质测试**：对两篇真实文档连续施加 40 次随机插入/删除，每步都要求增量切分结果与「从头切一遍」逐块相同，并断言增量路径命中率 > 70%（防止性质测试悄悄退化成每次全量） |
+| 缓存键 | `span.key` = `b<内容 FNV-1a>-<长度>-<上下文哈希>`；上下文包含文档路径（影响图片地址改写），所以换文档不会命中旧 HTML。key 用「对区间做哈希」，命中时连字符串切片都不做。`BlockRenderer` 再按出现次序给**重复内容**的块加 `~n` 后缀，得到文档内唯一的块 key（同时是 DOM 锚点与图表 id 前缀），否则重复段落会互相覆盖、重复图表只水合第一个 |
+| 缓存容量 | 上限 600 块，按插入顺序淘汰，但绝不淘汰本次用到的块（≥600 块的文档当前会跳过淘汰，见 §17 R18） |
 | DOM 更新 | 每块前置一个注释锚点 `<!--biu-block:key-->`（注释不参与 `:first-child` / `+` 选择器，不影响排版）。`applyBlocks()` 只替换变化块；分帧补齐时走 `appendBlocks()`，把新增块拼成一段 HTML **一次解析、一次追加**（逐块建 template 的开销在上万块时比渲染本身还大） |
 | 分帧 | `render(content, options, budgetMs)` 是**可分帧**的：一次只渲染到预算用完，返回 `done: false`，调用方下一帧接着渲染。命中缓存的块不受预算限制（否则大文档每次编辑要分几十帧）。首帧因此只占用约 12ms，剩余块在后续帧补齐 |
 | 批量消毒 | 连续未命中的块每 32 块包进 `<div data-biu-block=key>` **一次消毒**，再按包装节点拆回。Chromium 下消毒开销基本按字节线性，固定成本不大；批量主要让单帧粒度可控，包装节点同时充当 HTML 解析的修复边界 |
-| 图表 | 占位 id 带块 key 前缀（`<blockKey>-0`），跨块唯一；水合只处理本次重建的块，并按块记录 AbortController，避免误杀其它块的在途渲染 |
+| 图表 | 占位 id 带块 key 前缀（`<blockKey>-0`），重复内容块也唯一；水合只处理本次重建的块，并按块记录 AbortController，避免误杀其它块的在途渲染 |
 | 回退 | 任何拿不准的情况（上下文变化、上一轮已整篇回退、窗口内出现引用定义/原始 HTML、接缝对不上、改动吞掉整个窗口）都退回整篇重切，结果永远等价于从头切一遍 |
 
 **为什么不干脆用增量解析器**：`markdown-it` 没有增量解析，换 `@lezer/markdown` 需要重写整条 HTML 渲染链。按块切分在正确性可验证的前提下拿到了绝大部分收益。
@@ -1022,7 +1022,7 @@ mermaid 的 1.1MB 分块是**懒加载**的：不含图表的文档从不下载�
 
 ### 14.3 大数据量风险
 
-- **实测（真实 Electron 窗口；`BIU_PERF=1 npx playwright test e2e/perf.spec.ts` 会生成 0.2MB / 1MB 文档并打开）**：
+- **实测（真实 Electron 窗口；`e2e/perf.spec.ts` 默认打开 0.2MB 文档作为时延门禁，`BIU_PERF=1` 时额外测量 1MB）**：
 
   | 文档 | 预览首帧 | 全部渲染完成 | 顶层元素 |
   |------|---------|-------------|---------|
@@ -1068,11 +1068,11 @@ renderer: root: src/renderer, input: index.html,
 |------|------|------|
 | ESLint（flat config） | `npm run lint` | `**/*.{ts,tsx}`，js/ts recommended + react-hooks + react-refresh |
 | TypeScript | `npm run typecheck` | 主/渲染两套 |
-| Vitest | `npm test` | 纯函数与纯模块，以及 jsdom 下的图表渲染、Graphviz、导出 HTML、PDF 打印步骤、导出预览对话框 |
-| Playwright | `npm run test:e2e` | 启动打包后的 Electron：预览图表与 Graphviz、导出预览、写出 HTML 与 PDF |
+| Vitest | `npm test` | 纯函数与纯模块，以及 jsdom 下的图表渲染、Graphviz、导出 HTML、PDF 打印步骤、导出预览对话框、标签集合/目录级路径同步/关窗握手 |
+| Playwright | `npm run test:e2e` | 启动打包后的 Electron：预览图表与 Graphviz、导出预览、写出 HTML 与 PDF、文件树、标签页切换/关闭保存、0.2MB 首屏性能门禁（1MB 测量用 `BIU_PERF=1` 开启） |
 | i18n 校验 | `npm run check:i18n` | 三语 key 对齐 |
 
-**测试策略**：纯逻辑仍是主体（`shared/`、主进程纯函数、渲染层纯模块）。图表渲染、导出 HTML 组装、PDF 打印步骤，以及导出预览对话框和工具栏打开预览，放在 Vitest 的 jsdom 环境里测。桌面端到端用 Playwright 启动 `out/main/index.js`，覆盖真实窗口里的图表预览、HTML/PDF 导出、文件树（打开文件夹 → 重命名 → 删除）；`BIU_TEXT_E2E=1` 时主进程改用 `BIU_TEXT_USER_DATA` 指向的用户目录，并允许窗口直接关闭。`vitest.config.ts` 配置了 `@` / `@shared` / `@renderer` 别名；组件测试文件使用 `*.test.tsx`，并在文件头声明 `@vitest-environment jsdom`。
+**测试策略**：纯逻辑仍是主体（`shared/`、主进程纯函数、渲染层纯模块）。图表渲染、导出 HTML 组装、PDF 打印步骤，以及导出预览对话框和工具栏打开预览，放在 Vitest 的 jsdom 环境里测。桌面端到端用 Playwright 启动 `out/main/index.js`，覆盖真实窗口里的图表预览、HTML/PDF 导出、文件树（打开文件夹 → 重命名 → 删除）、标签页（多文件切换、脏标记、关闭时保存）、以及 **0.2MB 文档的首屏时延门禁**（首帧与首块出现时间有上限断言，避免增量渲染回归成整篇重排；1MB 的完整测量仍用 `BIU_PERF=1` 手动跑）；`BIU_TEXT_E2E=1` 时主进程改用 `BIU_TEXT_USER_DATA` 指向的用户目录，并允许窗口直接关闭。`vitest.config.ts` 配置了 `@` / `@shared` / `@renderer` 别名；组件测试文件使用 `*.test.tsx`，并在文件头声明 `@vitest-environment jsdom`。
 
 **弹窗骨架校验**（`e2e/dialog-skeleton.ts`）：对话框的**布局**无法在 jsdom 里验证（不做布局、拿不到 Tailwind 的计算值），所以把"看起来是个正常弹窗"做成真实 Electron 里的断言：在视口内、有标题与关闭入口、标题离左/上边缘 ≥8px、最后一个操作按钮离右/下边缘 ≥8px、不横向溢出、子元素不越界。`e2e/dialogs.spec.ts` 覆盖设置面板与导出预览，`e2e/workspace.spec.ts` 覆盖重命名弹窗。写这条是因为重命名弹窗曾把 `DialogContent` 当自带内边距的容器用——功能全对、样式全坏，而当时的单元测试和功能断言都发现不了。
 
@@ -1082,6 +1082,7 @@ renderer: root: src/renderer, input: index.html,
 
 - 触发：任意分支 `push`、`pull_request`，以及被 `release.yml` 通过 `workflow_call` 复用。
 - 单 job（`ubuntu-24.04`，Node 24）顺序执行：`npm ci` → `lint` → `typecheck` → `test` → `check:i18n` → `build` → `xvfb-run npx playwright test`。
+- e2e 里的 0.2MB 首屏时延测试**默认运行**（阈值放宽到 xvfb 也能稳定通过）；1MB 完整测量仍由 `BIU_PERF=1` 手动开启，不进门禁。
 - 用固定 registry 与 Electron 镜像地址，避免 runner 地域差异导致的下载失败。
 - `permissions: contents: read`，最小权限。
 
@@ -1267,8 +1268,9 @@ const inlinePreview = ViewPlugin.fromClass(class {
 
 1. **为什么不是「单实例换 `EditorState`」**：`@uiw/react-codemirror` 以 `value` 受控驱动，切换 state 需要绕过封装直接 `view.setState()`，还要自己接管撤销历史与滚动；多实例写的代码更少、行为更接近 VSCode（每文档独立 history）。代价是每个标签一份文档副本，5 个标签各 1MB 时内存线性增长——这是可接受的下限，且真正的大文档成本在预览渲染（§14.3），不在编辑器实例数。
 2. **为什么不做「懒挂载」**：每个文档被创建时立刻成为活动标签，也就立刻需要编辑器，懒挂载没有收益。
-3. **为什么不做标签持久化**：没有「会话恢复」语义之前，重启后自动打开一堆文件属于隐式行为；等文件树落地时一起做更合理。
-4. **已知边界**：切换标签时预览区的滚动位置按比例重算而非精确恢复（预览只按比例跟随编辑器）；`⌘1-9` 在对话框打开时同样生效（未拦截）。
+3. **为什么不做标签持久化**：没有「会话恢复」语义之前，重启后自动打开一堆文件属于隐式行为；等文件树落地时一起做更合理（v1.1 仍未做，与标签拖拽排序一起顺延）。
+4. **已知边界**：切换标签时预览区的滚动位置按比例重算而非精确恢复（预览只按比例跟随编辑器）；`⌘1-9` 在对话框打开时同样生效（未拦截）；标签拖拽排序已移出 v1.1（PRD Q8 顺延）。
+5. **关窗握手状态不跨窗口**：`closeGuard` 在 `createWindow()` 时复位。macOS 关窗不退出应用，重开窗口后再次关窗必须重新检查脏标签；`APP_CLOSE_CONFIRMED` 只对当次关闭有效（否则会静默丢弃未保存内容）。
 
 ### 16.4.1 文件树（v1.1，已落地）
 
@@ -1280,17 +1282,19 @@ const inlinePreview = ViewPlugin.fromClass(class {
        └─ readWorkspace(root)                           [只列 Markdown + 含 Markdown 的目录]
             ├─ 跳过隐藏项、node_modules/dist/out/.git 等
             ├─ 上限：5000 条目 / 深度 12
-            └─ 返回 { root, entries, skipped }
+            └─ 返回 { root, entries, skipped }；根目录不存在/不可读时返回 null
+
   └─ useWorkspace 写入状态 → FileTree 渲染
+       └─ null → 清掉 localStorage 根目录、不展开侧边栏（与"空文件夹"区分）
 
 点击文件 → useDocuments.openPath(path)                  [与「最近文件」同一条路径]
 右键 → 重命名 → 应用内对话框 → invoke WORKSPACE_RENAME
      ├─ isValidFileName()：拒绝路径分隔符 / 控制字符 / .. / 尾点空格
      ├─ resolveInsideRoot()：目标必须落在根目录内（防 ../ 越界）
      ├─ 覆盖判定用 dev+ino，**放行只改大小写的重命名**（Windows/macOS 大小写不敏感）
-     └─ 成功后 useDocuments.renamePath 同步已打开标签的路径 + 刷新树
-右键 → 删除 → 主进程 dialog.showMessageBox 确认（会提示未保存修改）
-     └─ shell.trashItem() 移入回收站 → useDocuments.closeByPath 关标签 + 刷新树
+     └─ 成功后 useDocuments.rebaseDocumentPaths 同步该文件/目录下所有已打开标签的路径 + 刷新树
+右键 → 删除 → 主进程 dialog.showMessageBox 确认（会聚合该路径下未保存修改的提示）
+     └─ shell.trashItem() 移入回收站 → useDocuments.removeDocumentsUnder 关闭其下所有标签 + 刷新树
 ```
 
 **取舍**
@@ -1302,6 +1306,8 @@ const inlinePreview = ViewPlugin.fromClass(class {
 5. **打开文件复用 `openPath`**：文件树不是新的打开通道，只是给 `useDocuments` 提供路径，因此「已打开则激活既有标签」「同一个文件不重复开」等行为自动一致。
 6. **记住根目录，也记住显示状态（三态）**：`localStorage: biu-text:workspace-root` 存根目录，启动时 `WORKSPACE_LOAD` 恢复；`biu-text:sidebar-visible` 存显示状态。侧边栏启动时先收起，恢复成功后再展开，展开与否**优先用记住的显示状态**——`false`（手动收起）就保持收起，`null`（旧版本升级上来或清过 localStorage）才默认展开。显式「打开文件夹」属于用户动作，会覆盖掉收起的偏好。这样既不会出现"文件树占着位置但里面没有文件夹"的空壳，也不会把用户刻意收起的面板强行拉回来。
 7. **标签栏属于编辑区那一列**：`App` 的布局是「工具栏 / [侧边栏 | 编辑区列] / 状态栏」，标签栏放在编辑区列里，因此文件树能从工具栏下方一直顶到状态栏；`containerRef`（分隔条按比例计算用）也只量编辑区+预览区这一块。
+8. **根目录不可读返回 `null`，不是空树**：`readdir` 失败、根路径不是目录都返回 `null`。渲染层据此清掉记住的根目录并保持侧边栏收起（PRD F-12），否则会出现「记住了一个空壳目录、每次启动都展开」；子目录读失败仍然只跳过该分支。
+9. **重命名/删除是目录级操作**：右键菜单对目录同样开放，因此标签同步按**路径前缀**处理——重命名 `docs/` 会改写 `docs/a.md`、`docs/deep/b.md` 的路径，删除 `docs/` 会关闭其下所有标签；删除确认的「未保存修改」也按前缀聚合，避免只检查目录路径本身。
 
 ### 16.5 版本影响矩阵
 
@@ -1310,7 +1316,7 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | v0.4 | Mermaid（✅ 已落地）、本地图片粘贴/拖放/工具栏插入（✅ 已落地）、工具栏「插入 Mermaid」（✅ 已落地）、图床设置 UI（仅本地项可用，云端为占位） | `markdown.ts`（fence 规则）、`diagram.ts`（`MERMAID_SNIPPET`）+ `diagram-hydrate.ts`（水合）、`Preview`、`Editor`（paste/drop）、`block-insert.ts`（块插入）、`image-save.ts` / `export-image.ts`（主进程）、`ipc-channels`、CSP | 同步/异步管线（已解决，§8.8）、CSP 阻断（已解决，§8.5）、导出水合（已解决）、PDF 相对图片（已解决，§10.4）、资产生命周期（见 §17 R15） |
 | v0.5 | 云图床（✅ GitHub + 自定义 HTTP 已落地）、上传占位符与重试（✅）、进度条（✅）、测试连接（✅）、批量上传（✅ 多选/多文件粘贴）、其余厂商图床（未做） | `shared/image-host.ts`、`main/image-host-store.ts`、`main/http-upload.ts`、`main/image-host-providers.ts`、`IMAGE_HOST_*` / `IMAGE_UPLOAD` / `IMAGE_UPLOAD_PROGRESS` 通道、`useImageHost` / `useImageUpload` / `upload-placeholder` / `upload-store`、`SettingsPanel/ImageHostSettings`、`UploadIndicator`、Toast 动作按钮 | 凭证安全（已用 `safeStorage`，明文降级见 §13.3）、网络失败语义（已定：保留占位符 + 重试）、进度串扰（已用 `uploadId` 隔离） |
 | v1.0 | 内联渲染（✅ v0.6）、ChartJS 预览与导出（✅）、Graphviz 预览与导出（✅）、导出前预览（✅）、自定义模板与批量导出（未做） | CodeMirror ViewPlugin、`diagramRenderers`、导出管线 | 编辑体验回归、性能、缓存一致性 |
-| v1.1 | 多标签页（✅ 已落地）、预览增量渲染（✅ 已落地）、文件树（✅ 已落地）、手绘图 Excalidraw（✅ 已落地）、插件机制（暂缓） | `shared/documents.ts`、`hooks/useDocuments.ts`（取代 `useFile`）、`components/TabBar`、`App` 按集合渲染、`lib/markdown-blocks.ts` + `lib/block-renderer.ts` + `lib/preview-dom.ts`、`Preview` 改为手动管理 DOM、`shared/workspace.ts` + `main/workspace.ts` + `hooks/useWorkspace.ts` + `components/FileTree`、`WORKSPACE_*` 通道、`shared/excalidraw.ts` + `lib/excalidraw-render.ts` + `components/ExcalidrawEditor`、`diagramRenderers.excalidraw`、`useImageUpload` 按 docId 回填、`tabs.*` / `workspace.*` / `excalidraw.*` 三语文案 | 单文档假设（已解决）、状态迁移（已解决）、多实例内存（线性，未设上限）、分段正确性（已用真实文档字节比对兜住）、增量 DOM（已用 e2e 断言 SVG 节点不重建）、文件系统约定（大小写重命名 / 回收站 / 无监听，见 §16.6）、手绘依赖体量与字体（R17） |
+| v1.1 | 多标签页（✅ 已落地）、预览增量渲染（✅ 已落地）、文件树（✅ 已落地）、手绘图 Excalidraw（✅ 已落地）；插件机制、上传历史、标签拖拽排序、链接预览、表格实时渲染移出 v1.1 | `shared/documents.ts`、`hooks/useDocuments.ts`（取代 `useFile`）、`components/TabBar`、`App` 按集合渲染、`lib/markdown-blocks.ts` + `lib/block-renderer.ts` + `lib/preview-dom.ts`、`Preview` 改为手动管理 DOM、`shared/workspace.ts` + `main/workspace.ts` + `hooks/useWorkspace.ts` + `components/FileTree`、`WORKSPACE_*` 通道、`shared/excalidraw.ts` + `lib/excalidraw-render.ts` + `components/ExcalidrawEditor`、`diagramRenderers.excalidraw`、`useImageUpload` 按 docId 回填、`tabs.*` / `workspace.*` / `excalidraw.*` 三语文案 | 单文档假设（已解决）、状态迁移（已解决）、多实例内存（线性，未设上限）、分段正确性（已用真实文档字节比对兜住）、增量 DOM（已用 e2e 断言 SVG 节点不重建）、重复内容块 key/图表 id 唯一（v1.1.0）、缩进围栏与列表惰性续行切块（v1.1.0）、目录级标签同步与根目录 null（v1.1.0）、关窗状态按窗口复位（v1.1.0）、文件系统约定（大小写重命名 / 回收站 / 无监听，见 §16.6）、手绘依赖体量与字体（R17） |
 
 ---
 
@@ -1333,7 +1339,8 @@ const inlinePreview = ViewPlugin.fromClass(class {
 | R13 | 预览外链点击处理为兜底空操作，依赖主进程拦截 | 行为耦合、可读性差 | 明确由 `setWindowOpenHandler` 负责，移除或注释化渲染层监听 |
 | R14 | 5 个 Radix 包（dialog、dropdown-menu、scroll-area、toast、tooltip）已装未用 | 增大依赖体积与安装时间 | toast 已在 v0.4 用于轻量通知（§6.6），tooltip 用于工具栏提示；剩余包按需移除，或在引入对应能力时复用 |
 | R16 | 文件树不监听文件系统 | 外部新增/删除/改名后树是旧的，需要手动刷新；若外部删除了已打开的文件，保存会失败 | 先在头部提供刷新按钮（已实现）。若后续要做监听，用 `fs.watch` 只监听根目录一层 + 去抖，而不是整棵树递归；本项暂不引入新依赖 |
-| R17 | 手绘图依赖体量大 + 字体不内联 | `@excalidraw/excalidraw` 约 1.5MB，打开编辑器或遇到 `excalidraw` 块时才下载（懒加载，不进主包）；导出 SVG 不内联手写体字体，文字用系统字体回退，视觉与编辑器内略有差异 | 体量已用懒加载隔离；若后续要统一字体观感，可把 `excalidraw-assets` 里的字体复制进 `public/` 并设置 `window.EXCALIDRAW_ASSET_PATH` 指向本地路径（CSP `default-src 'self'` 允许同源） |
+| R17 | 手绘图依赖体量大 + 字体不内联 | `@excalidraw/excalidraw` 约 1.5MB，打开编辑器或遇到 `excalidraw` 块时才下载（懒加载，不进主包）；导出 SVG 不内联手写体字体，文字用系统字体回退，视觉与编辑器内略有差异；CSP 也不允许从 CDN 拉字体，编辑区同样回退 | 体量已用懒加载隔离；若后续要统一字体观感，可把 `excalidraw-assets` 里的字体复制进 `public/` 并设置 `window.EXCALIDRAW_ASSET_PATH` 指向本地路径（CSP `default-src 'self'` 允许同源） |
+| R18 | 增量预览的剩余边界 | ① 缓存上限 600 在 ≥600 块的文档上直接跳过淘汰，长时间编辑会持续增长内存；② 分帧 generation 的第一帧会移除尚未渲染的尾部旧块，之后补回，期间图表重新水合、滚动位置可能跳；③ 切换标签会重建全部块（`key={activeId}`）。v1.1.0 已修其中重复内容块 key 冲突 | 后续给缓存加真正的容量上限（按字节或 LRU）、首帧保留未渲染的尾部块、按文档复用 renderer/缓存；已在 §14.3 记录性能特征 |
 
 ---
 

@@ -6,10 +6,15 @@ import {
   documentLabel,
   findDocumentByPath,
   isDocumentDirty,
+  isPathWithin,
   neighborDocumentId,
   nextDocumentId,
   normalizePath,
   patchDocument,
+  rebaseDocumentPaths,
+  rebasePath,
+  removeDocumentsUnder,
+  type DocumentsState,
   type TabDocument
 } from './documents'
 
@@ -72,8 +77,93 @@ describe('path helpers', () => {
   })
 })
 
-describe('neighborDocumentId', () => {
-  const documents = [doc('a'), doc('b'), doc('c')]
+describe('目录级路径操作', () => {
+  it('isPathWithin 按分隔符边界比较，且大小写不敏感', () => {
+    expect(isPathWithin('C:\\notes\\docs\\a.md', 'C:\\notes\\docs')).toBe(true)
+    expect(isPathWithin('C:/notes/docs/a.md', 'C:/notes/docs/')).toBe(true)
+    expect(isPathWithin('C:/NOTES/Docs/A.md', 'C:/notes/docs')).toBe(true)
+    expect(isPathWithin('C:/notes/docs', 'C:/notes/docs')).toBe(true)
+    // 前缀相似但不是子路径
+    expect(isPathWithin('C:/notes/docs2/a.md', 'C:/notes/docs')).toBe(false)
+    expect(isPathWithin('/notes/other.md', '/notes/docs')).toBe(false)
+    expect(isPathWithin('/notes/docs/a.md', '')).toBe(false)
+  })
+
+  it('rebasePath 只改写位于 from 下的路径，并保留分隔符风格', () => {
+    expect(rebasePath('C:\\notes\\docs\\a.md', 'C:\\notes\\docs', 'C:\\notes\\new')).toBe(
+      'C:\\notes\\new\\a.md'
+    )
+    expect(rebasePath('/notes/docs/deep/a.md', '/notes/docs', '/notes/new')).toBe(
+      '/notes/new/deep/a.md'
+    )
+    expect(rebasePath('/notes/docs', '/notes/docs', '/notes/new')).toBe('/notes/new')
+    expect(rebasePath('/notes/docs2/a.md', '/notes/docs', '/notes/new')).toBeNull()
+  })
+
+  it('rebaseDocumentPaths 同步目录下所有打开的标签', () => {
+    const state: DocumentsState = {
+      documents: [
+        doc('a', 'C:\\notes\\docs\\a.md'),
+        doc('b', 'C:\\notes\\docs\\deep\\b.md'),
+        doc('c', 'C:\\notes\\other.md'),
+        doc('d')
+      ],
+      activeId: 'a'
+    }
+    const next = rebaseDocumentPaths(state, 'C:\\notes\\docs', 'C:\\notes\\new')
+
+    expect(next.documents.map((document) => document.filePath)).toEqual([
+      'C:\\notes\\new\\a.md',
+      'C:\\notes\\new\\deep\\b.md',
+      'C:\\notes\\other.md',
+      null
+    ])
+    // 没有命中的标签原样复用，不触发无意义重渲染
+    expect(next.documents[2]).toBe(state.documents[2])
+    expect(next.documents[3]).toBe(state.documents[3])
+    expect(next.activeId).toBe('a')
+  })
+
+  it('rebaseDocumentPaths 没有命中时返回同一个对象', () => {
+    const state: DocumentsState = { documents: [doc('a', '/notes/a.md')], activeId: 'a' }
+    expect(rebaseDocumentPaths(state, '/notes/docs', '/notes/new')).toBe(state)
+  })
+
+  it('removeDocumentsUnder 关掉目录下的所有标签，并激活右边邻居', () => {
+    const state: DocumentsState = {
+      documents: [
+        doc('a', '/notes/docs/a.md'),
+        doc('b', '/notes/docs/b.md'),
+        doc('c', '/notes/other.md'),
+        doc('d')
+      ],
+      activeId: 'b'
+    }
+    const next = removeDocumentsUnder(state, '/notes/docs')
+
+    expect(next.documents.map((document) => document.id)).toEqual(['c', 'd'])
+    expect(next.activeId).toBe('c')
+  })
+
+  it('目录删空时补一个空文档，不会出现零标签', () => {
+    const state: DocumentsState = {
+      documents: [doc('a', '/notes/docs/a.md'), doc('b', '/notes/docs/b.md')],
+      activeId: 'a'
+    }
+    const next = removeDocumentsUnder(state, '/notes/docs')
+
+    expect(next.documents).toHaveLength(1)
+    expect(next.documents[0].content).toBe('')
+    expect(next.documents[0].filePath).toBeNull()
+  })
+
+  it('removeDocumentsUnder 没有命中时返回同一个对象', () => {
+    const state: DocumentsState = { documents: [doc('a', '/notes/a.md')], activeId: 'a' }
+    expect(removeDocumentsUnder(state, '/notes/docs')).toBe(state)
+  })
+})
+
+describe('neighborDocumentId', () => {  const documents = [doc('a'), doc('b'), doc('c')]
 
   it('优先取右边那个', () => {
     expect(neighborDocumentId(documents, 'a')).toBe('b')

@@ -11,6 +11,7 @@ import { imageFileName } from './image-save'
 import { inlineLocalImages } from './export-image'
 import { writePdfDocument } from './export-pdf'
 import { readWorkspace, renameWorkspaceEntry, trashWorkspaceEntry } from './workspace'
+import { createCloseGuard } from './close-guard'
 import { loadImageHostConfig, saveImageHostConfig } from './image-host-store'
 import { testImageHost, uploadImage } from './image-host-providers'
 import {
@@ -36,7 +37,7 @@ if (e2eUserData) {
 }
 
 let mainWindow: BrowserWindow | null = null
-let isReadyToClose = false
+const closeGuard = createCloseGuard()
 let recentFiles: RecentFileRecord[] = []
 let currentLanguage: AppLanguage = 'en-US'
 let imageBaseDir: string | null = null
@@ -163,6 +164,9 @@ async function recordRecentFile(filePath: string): Promise<void> {
 }
 
 function createWindow(): void {
+  // 每个窗口生命周期都从头开始：上次关窗的"已放行"不能带进新窗口，
+  // 否则 macOS 上重开窗口后再关窗会跳过未保存检查。
+  closeGuard.reset()
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -186,7 +190,7 @@ function createWindow(): void {
   // 拦截窗口关闭，询问渲染进程是否有未保存内容
   mainWindow.on('close', (e) => {
     if (process.env.BIU_TEXT_E2E === '1') return
-    if (!isReadyToClose) {
+    if (!closeGuard.isReady()) {
       e.preventDefault()
       mainWindow!.webContents.send(IPC.APP_WILL_CLOSE)
     }
@@ -549,12 +553,12 @@ ipcMain.handle(
 )
 
 ipcMain.on(IPC.APP_CLOSE_CONFIRMED, () => {
-  isReadyToClose = true
+  closeGuard.markReady()
   mainWindow?.close()
 })
 
 ipcMain.on(IPC.APP_CLOSE_CANCELLED, () => {
-  isReadyToClose = false
+  closeGuard.reset()
 })
 
 // 关闭窗口、新建、打开共用：脏内容先问一句，避免静默丢弃

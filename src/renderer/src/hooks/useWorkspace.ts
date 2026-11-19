@@ -36,10 +36,14 @@ function writeStoredRoot(root: string | null): void {
   }
 }
 
+/** 删除成功提示里只显示名字，不显示完整路径 */
+function fileNameOf(path: string): string {
+  return path.split(/[\\/]/).pop() || path
+}
+
 export interface UseWorkspaceResult {
   root: string | null
   entries: WorkspaceSnapshot['entries']
-  skipped: number
   loading: boolean
   /** 弹目录选择框；用户取消时返回 false，什么都不变 */
   openFolder: () => Promise<boolean>
@@ -62,7 +66,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const { t } = useTranslation()
   const [root, setRoot] = useState<string | null>(null)
   const [entries, setEntries] = useState<WorkspaceSnapshot['entries']>([])
-  const [skipped, setSkipped] = useState(0)
   const [loading, setLoading] = useState(false)
 
   // IPC 回调里要读最新根目录，避免闭包里的旧值
@@ -75,7 +78,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     if (!snapshot) return false
     setRoot(snapshot.root)
     setEntries(snapshot.entries)
-    setSkipped(snapshot.skipped)
     return true
   }, [])
 
@@ -122,7 +124,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         // 根目录被删掉或无法读取：关掉文件树，避免显示过期内容
         setRoot(null)
         setEntries([])
-        setSkipped(0)
         writeStoredRoot(null)
       }
     } finally {
@@ -133,7 +134,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const closeFolder = useCallback(() => {
     setRoot(null)
     setEntries([])
-    setSkipped(0)
     writeStoredRoot(null)
   }, [])
 
@@ -178,6 +178,10 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       }
       onDeleted(path)
       await refresh()
+      toast({
+        level: 'success',
+        title: t('workspace.deleteSucceeded', { name: fileNameOf(path) })
+      })
       return true
     },
     [isDirty, onDeleted, refresh, t]
@@ -186,7 +190,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   return {
     root,
     entries,
-    skipped,
     loading,
     openFolder,
     refresh,

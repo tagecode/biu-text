@@ -172,6 +172,7 @@ describe('useWorkspace', () => {
     expect(remove).toHaveBeenCalledWith(ROOT, `${ROOT}/a.md`, true)
     expect(ok).toBe(true)
     expect(callbacks.onDeleted).toHaveBeenCalledWith(`${ROOT}/a.md`)
+    expect(getToasts()[0]?.title).toContain('Moved “a.md” to the trash')
   })
 
   it('用户在确认框里取消时不提示错误、不关标签', async () => {

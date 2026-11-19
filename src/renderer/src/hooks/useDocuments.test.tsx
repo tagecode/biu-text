@@ -7,16 +7,27 @@ import { useDocuments } from './useDocuments'
 const unsub = (): (() => void) => () => undefined
 
 let confirmChoice: 'save' | 'discard' | 'cancel' = 'cancel'
+/** 按顺序消费的三态结果；空时回退到 confirmChoice */
+let confirmQueue: Array<'save' | 'discard' | 'cancel'> = []
 let saveDialogResult: { path: string } | null = null
+let willClose: (() => void) | null = null
 
 const fileAPISave = vi.fn(async () => ({ success: true }))
 const fileAPISaveAs = vi.fn(async () => saveDialogResult)
+const confirmDiscardChanges = vi.fn(async () => confirmQueue.shift() ?? confirmChoice)
+const confirmClose = vi.fn()
+const cancelClose = vi.fn()
 
 beforeEach(() => {
   confirmChoice = 'cancel'
+  confirmQueue = []
   saveDialogResult = null
+  willClose = null
   fileAPISave.mockClear()
   fileAPISaveAs.mockClear()
+  confirmDiscardChanges.mockClear()
+  confirmClose.mockClear()
+  cancelClose.mockClear()
 
   window.fileAPI = {
     openDialog: async () => null,
@@ -38,12 +49,17 @@ beforeEach(() => {
 
   window.windowAPI = {
     platform: 'win32',
-    confirmDiscardChanges: async () => confirmChoice,
+    confirmDiscardChanges,
     setTitle: () => undefined,
-    onWillClose: () => unsub(),
+    onWillClose: (cb) => {
+      willClose = cb
+      return () => {
+        if (willClose === cb) willClose = null
+      }
+    },
     onNotify: () => unsub(),
-    confirmClose: () => undefined,
-    cancelClose: () => undefined
+    confirmClose,
+    cancelClose
   }
 
   window.imageAPI = {
@@ -249,6 +265,53 @@ describe('useDocuments', () => {
     expect(result.current.isDirty).toBe(false)
   })
 
+  it('目录重命名后同步其下所有标签的路径', async () => {
+    const { result } = renderHook(() => useDocuments())
+    await act(async () => {
+      await result.current.openPath('/notes/docs/a.md')
+    })
+    await act(async () => {
+      await result.current.openPath('/notes/docs/deep/b.md')
+    })
+
+    act(() => result.current.renamePath('/notes/docs', '/notes/new'))
+
+    const paths = result.current.documents.map((document) => document.filePath)
+    expect(paths).toEqual([null, '/notes/new/a.md', '/notes/new/deep/b.md'])
+  })
+
+  it('目录删除后关掉其下所有标签，保留无关标签', async () => {
+    const { result } = renderHook(() => useDocuments())
+    await act(async () => {
+      await result.current.openPath('/notes/docs/a.md')
+    })
+    await act(async () => {
+      await result.current.openPath('/notes/docs/deep/b.md')
+    })
+    await act(async () => {
+      await result.current.openPath('/notes/other.md')
+    })
+
+    act(() => result.current.closeByPath('/notes/docs'))
+
+    const paths = result.current.documents.map((document) => document.filePath)
+    expect(paths).toEqual([null, '/notes/other.md'])
+  })
+
+  it('目录的脏检查覆盖其下所有文档', async () => {
+    const { result } = renderHook(() => useDocuments())
+    await act(async () => {
+      await result.current.openPath('/notes/docs/a.md')
+    })
+    const docId = result.current.activeId
+    act(() => result.current.setContent(docId, '改了'))
+
+    expect(result.current.isPathDirty('/notes/docs/a.md')).toBe(true)
+    expect(result.current.isPathDirty('/notes/docs')).toBe(true)
+    expect(result.current.isPathDirty('/notes/docs2')).toBe(false)
+    expect(result.current.isPathDirty('/notes/other.md')).toBe(false)
+  })
+
   it('⌘1-9 的下标越界时保持不变，第 9 个落在最后一个标签', async () => {
     const { result } = renderHook(() => useDocuments())
     await act(async () => {
@@ -284,6 +347,57 @@ describe('useDocuments', () => {
       canClose = await result.current.confirmCloseAll()
     })
     expect(canClose).toBe(false)
+  })
+
+  it('关窗时没有脏标签直接放行，不弹确认框', async () => {
+    renderHook(() => useDocuments())
+    await waitFor(() => expect(willClose).not.toBeNull())
+
+    act(() => willClose?.())
+
+    await waitFor(() => expect(confirmClose).toHaveBeenCalledTimes(1))
+    expect(cancelClose).not.toHaveBeenCalled()
+    expect(confirmDiscardChanges).not.toHaveBeenCalled()
+  })
+
+  it('关窗时逐个保存脏标签，全部成功后放行', async () => {
+    const { result } = renderHook(() => useDocuments())
+    await act(async () => {
+      await result.current.openPath('/notes/a.md')
+    })
+    act(() => result.current.setContent(result.current.activeId, '改 A'))
+    await act(async () => {
+      await result.current.openPath('/notes/b.md')
+    })
+    act(() => result.current.setContent(result.current.activeId, '改 B'))
+    confirmQueue = ['save', 'save']
+
+    act(() => willClose?.())
+
+    await waitFor(() => expect(confirmClose).toHaveBeenCalledTimes(1))
+    expect(cancelClose).not.toHaveBeenCalled()
+    expect(fileAPISave).toHaveBeenNthCalledWith(1, '/notes/a.md', '改 A')
+    expect(fileAPISave).toHaveBeenNthCalledWith(2, '/notes/b.md', '改 B')
+  })
+
+  it('关窗时第二个标签取消：整体中止，已处理的标签保持已保存', async () => {
+    const { result } = renderHook(() => useDocuments())
+    await act(async () => {
+      await result.current.openPath('/notes/a.md')
+    })
+    act(() => result.current.setContent(result.current.activeId, '改 A'))
+    await act(async () => {
+      await result.current.openPath('/notes/b.md')
+    })
+    act(() => result.current.setContent(result.current.activeId, '改 B'))
+    confirmQueue = ['save', 'cancel']
+
+    act(() => willClose?.())
+
+    await waitFor(() => expect(cancelClose).toHaveBeenCalledTimes(1))
+    expect(confirmClose).not.toHaveBeenCalled()
+    expect(fileAPISave).toHaveBeenCalledTimes(1)
+    expect(fileAPISave).toHaveBeenCalledWith('/notes/a.md', '改 A')
   })
 
   it('内容改动会同步更新窗口标题的脏标记', async () => {

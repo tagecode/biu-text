@@ -148,12 +148,11 @@ const zhCN = {
     delete: '删除',
     deleteFailed: '删除失败',
     deleteSucceeded: '已把「{{name}}」移到回收站',
-    confirmDeleteTitle: '删除文件',
+    confirmDeleteTitle: '移到回收站',
     confirmDeleteMessage: '确定把「{{name}}」移到回收站吗？',
     confirmDeleteDirty: '「{{name}}」还有未保存的修改，删除后这些修改会一起丢失。',
     cancel: '取消',
-    closeDialog: '关闭',
-    skipped: '已忽略 {{count}} 个非 Markdown 条目'
+    closeDialog: '关闭'
   },
   exportPreview: {
     title: '导出预览',
@@ -175,7 +174,7 @@ const zhCN = {
   },
   excalidraw: {
     title: '插入手绘图',
-    hint: '画完点「插入」，会写成一个 excalidraw 代码块，之后还能再编辑',
+    hint: '画完点「插入」，会写成一个 excalidraw 代码块；之后可在 excalidraw.com 里继续编辑',
     insert: '插入',
     cancel: '取消',
     close: '关闭手绘图编辑器',
@@ -417,12 +416,11 @@ const enUS = {
     delete: 'Delete',
     deleteFailed: 'Delete failed',
     deleteSucceeded: 'Moved “{{name}}” to the trash',
-    confirmDeleteTitle: 'Delete file',
+    confirmDeleteTitle: 'Move to trash',
     confirmDeleteMessage: 'Move “{{name}}” to the trash?',
     confirmDeleteDirty: '“{{name}}” has unsaved changes; deleting it will discard them.',
     cancel: 'Cancel',
-    closeDialog: 'Close',
-    skipped: '{{count}} non-Markdown entries ignored'
+    closeDialog: 'Close'
   },
   exportPreview: {
     title: 'Export preview',
@@ -444,7 +442,7 @@ const enUS = {
   },
   excalidraw: {
     title: 'Insert drawing',
-    hint: 'When you are done, click Insert — it becomes an excalidraw code block you can edit again',
+    hint: 'When you are done, click Insert — it becomes an excalidraw code block you can keep editing at excalidraw.com',
     insert: 'Insert',
     cancel: 'Cancel',
     close: 'Close drawing editor',
@@ -686,12 +684,11 @@ const zhTW = {
     delete: '刪除',
     deleteFailed: '刪除失敗',
     deleteSucceeded: '已把「{{name}}」移到資源回收筒',
-    confirmDeleteTitle: '刪除檔案',
+    confirmDeleteTitle: '移到資源回收筒',
     confirmDeleteMessage: '確定把「{{name}}」移到資源回收筒嗎？',
     confirmDeleteDirty: '「{{name}}」還有未儲存的修改，刪除後這些修改會一起遺失。',
     cancel: '取消',
-    closeDialog: '關閉',
-    skipped: '已忽略 {{count}} 個非 Markdown 項目'
+    closeDialog: '關閉'
   },
   exportPreview: {
     title: '匯出預覽',
@@ -713,7 +710,7 @@ const zhTW = {
   },
   excalidraw: {
     title: '插入手繪圖',
-    hint: '畫完點「插入」，會寫成一個 excalidraw 程式碼區塊，之後還能再編輯',
+    hint: '畫完點「插入」，會寫成一個 excalidraw 程式碼區塊；之後可在 excalidraw.com 裡繼續編輯',
     insert: '插入',
     cancel: '取消',
     close: '關閉手繪圖編輯器',

@@ -1,24 +1,10 @@
 import path from 'node:path'
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { expect, type ElectronApplication, type Page } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { test } from './electron'
 import { expectDialogSkeleton } from './dialog-skeleton'
-
-/** 原生目录选择框直接返回给定目录，并触发「文件 → 打开文件夹」 */
-async function openFolder(
-  electronApp: ElectronApplication,
-  window: Page,
-  folder: string
-): Promise<void> {
-  await electronApp.evaluate(({ dialog }, target) => {
-    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [target] })
-  }, folder)
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0].webContents.send('menu:open-folder')
-  })
-  await expect(window.getByRole('tree')).toBeVisible()
-}
+import { openFolder } from './open-folder'
 
 const SIDEBAR_PREF_KEY = 'biu-text:sidebar-visible'
 

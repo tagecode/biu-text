@@ -19,6 +19,13 @@ const { readWorkspace, renameWorkspaceEntry, resolveInsideRoot, trashWorkspaceEn
 
 let root = ''
 
+/** 成功时返回快照；失败（根目录不可读）返回 null 的用例单独断言 */
+async function read(rootPath: string) {
+  const snapshot = await readWorkspace(rootPath)
+  if (!snapshot) throw new Error(`expected a workspace snapshot for ${rootPath}`)
+  return snapshot
+}
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'biu-ws-'))
   // docs/guide.md、docs/deep/spec.markdown、readme.md
@@ -42,7 +49,7 @@ afterEach(async () => {
 
 describe('readWorkspace', () => {
   it('只列出 Markdown 文件与包含它们的目录', async () => {
-    const snapshot = await readWorkspace(root)
+    const snapshot = await read(root)
     const names = flattenEntries(snapshot.entries).map((entry) => entry.name)
 
     expect(snapshot.root).toBe(resolve(root))
@@ -59,21 +66,24 @@ describe('readWorkspace', () => {
   })
 
   it('目录排在文件前，并记录被忽略的条目数', async () => {
-    const snapshot = await readWorkspace(root)
+    const snapshot = await read(root)
     expect(snapshot.entries[0]).toMatchObject({ name: 'docs', type: 'directory' })
     expect(snapshot.entries[1]).toMatchObject({ name: 'readme.md', type: 'file' })
     expect(snapshot.skipped).toBeGreaterThan(0)
   })
 
   it('路径是绝对路径，可直接用于打开文件', async () => {
-    const snapshot = await readWorkspace(root)
+    const snapshot = await read(root)
     const file = flattenEntries(snapshot.entries).find((entry) => entry.name === 'guide.md')
     expect(file?.path).toBe(join(resolve(root), 'docs', 'guide.md'))
   })
 
-  it('目录不存在时返回空树而不是抛错', async () => {
-    const snapshot = await readWorkspace(join(root, 'missing'))
-    expect(snapshot.entries).toEqual([])
+  it('目录不存在时返回 null，与「空文件夹」区分开', async () => {
+    expect(await readWorkspace(join(root, 'missing'))).toBeNull()
+  })
+
+  it('根路径不是目录时返回 null', async () => {
+    expect(await readWorkspace(join(root, 'readme.md'))).toBeNull()
   })
 })
 

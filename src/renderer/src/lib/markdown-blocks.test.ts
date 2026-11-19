@@ -34,6 +34,12 @@ const snippets: Record<string, string> = {
   katex: '公式 $a^2+b^2=c^2$ 行内\n\n$$\nE=mc^2\n$$\n',
   listThenParagraph: '- a\n\n段落\n',
   indentedCode: '段落\n\n    code line\n\n段落\n',
+  indentedFence: '  ```ts\n  const a = 1\n\n  const b = 2\n  ```\n\n段落\n',
+  indentedRefLink: ' [foo]: /url\n\n使用 [foo]。\n',
+  indentedFootnote: '文本[^1]\n\n [^1]: 脚注内容\n',
+  indentedHtml: '  <div>\n\n中间\n\n  </div>\n',
+  lazyList: '- item\nlazy\n\n- next\n',
+  lazyOrdered: '1. a\nlazy\n\n2. b\n',
   taskList: '- [ ] a\n\n- [x] b\n',
   refLink: '[foo]: /url "title"\n\n使用 [foo] 链接。\n',
   footnote: '文本[^1]\n\n[^1]: 脚注内容\n',
@@ -93,6 +99,28 @@ describe('splitMarkdownSpans', () => {
     expect(splitMarkdownSpans('段落\n\n<div>\n内容\n</div>').segmented).toBe(false)
   })
 
+  it('1–3 空格缩进的引用定义 / 脚注 / 原始 HTML 同样放弃分段', () => {
+    for (const source of [
+      ' [foo]: /url\n\n使用 [foo]。',
+      '文本[^1]\n\n [^1]: 脚注',
+      '  <div>\n\n中间\n\n  </div>'
+    ]) {
+      expect(splitMarkdownSpans(source).segmented, source).toBe(false)
+    }
+  })
+
+  it('1–3 空格缩进的围栏按围栏处理，不被内部空行切开', () => {
+    const content = '  ```ts\n  code\n\n  more\n  ```'
+    const spans = splitMarkdownSpans(content).spans
+    expect(spans).toHaveLength(1)
+    expect(content.slice(spans[0].start, spans[0].end)).toContain('more')
+  })
+
+  it('列表项的惰性续行不与后面的列表项切开', () => {
+    expect(splitMarkdownSpans('- item\nlazy\n\n- next').spans).toHaveLength(1)
+    expect(splitMarkdownSpans('1. a\nlazy\n\n2. b').spans).toHaveLength(1)
+  })
+
   it('块 key 只由内容与上下文决定', () => {
     const a = splitMarkdownSpans('段落一\n\n段落二')
     const b = splitMarkdownSpans('段落一\n\n段落二')
@@ -113,7 +141,14 @@ describe('逐块渲染与整篇渲染等价', () => {
   })
 
   it('语料：已知跨块构造必须被识别为不可分段', () => {
-    for (const name of ['refLink', 'footnote', 'htmlBlock']) {
+    for (const name of [
+      'refLink',
+      'footnote',
+      'htmlBlock',
+      'indentedRefLink',
+      'indentedFootnote',
+      'indentedHtml'
+    ]) {
       expect(splitMarkdownSpans(snippets[name]).segmented, name).toBe(false)
     }
   })
@@ -180,12 +215,12 @@ describe('IncrementalSplitter', () => {
     expectSameSpans(splitter.split(merged), splitMarkdownSpans(merged), '删除空行')
   })
 
-  it('插入缩进行会与上一块粘连', () => {
+  it('插入缩进代码行会与上一块粘连', () => {
     const splitter = new IncrementalSplitter()
     const content = '段落一\n\n段落二\n'
     splitter.split(content)
-    const indented = '段落一\n\n  段落二\n'
-    expectSameSpans(splitter.split(indented), splitMarkdownSpans(indented), '缩进行')
+    const indented = '段落一\n\n   段落二\n'
+    expectSameSpans(splitter.split(indented), splitMarkdownSpans(indented), '缩进代码行')
   })
 
   it('在围栏内部插入空行不会切出新块', () => {

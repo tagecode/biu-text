@@ -12,10 +12,12 @@ import {
   findDocumentById,
   findDocumentByPath,
   isDocumentDirty,
+  isPathWithin,
   neighborDocumentId,
   nextDocumentId,
-  normalizePath,
   patchDocument,
+  rebaseDocumentPaths,
+  removeDocumentsUnder,
   withActiveId,
   type DocumentsState,
   type TabDocument
@@ -41,10 +43,6 @@ function withoutDocument(state: DocumentsState, docId: string): DocumentsState {
   return { documents: remaining, activeId }
 }
 
-function samePath(a: string | null, b: string): boolean {
-  return a !== null && normalizePath(a) === normalizePath(b)
-}
-
 export interface UseDocumentsResult {
   documents: readonly TabDocument[]
   activeId: string
@@ -60,11 +58,11 @@ export interface UseDocumentsResult {
   openFile: () => Promise<void>
   openPath: (path: string) => Promise<void>
   closeDocument: (docId: string) => Promise<boolean>
-  /** 文件被重命名后同步标签里的路径 */
+  /** 文件或目录被重命名后同步标签里的路径 */
   renamePath: (from: string, to: string) => void
-  /** 文件被删除后直接关掉对应标签（调用方已完成用户确认） */
+  /** 文件或目录被删除后直接关掉对应标签（调用方已完成用户确认） */
   closeByPath: (path: string) => void
-  /** 某个路径对应的文档是否有未保存修改 */
+  /** 某个路径（可以是目录）下是否有未保存修改 */
   isPathDirty: (path: string) => boolean
   saveDocument: (docId?: string) => Promise<string | null>
   saveFile: () => Promise<boolean>
@@ -297,33 +295,29 @@ export function useDocuments(): UseDocumentsResult {
     [commit, saveDocument, t]
   )
 
-  /** 文件在磁盘上被重命名后，把打开的标签同步到新路径 */
+  /** 文件或目录在磁盘上被重命名后，把打开的标签同步到新路径（含目录下的子孙文档） */
   const renamePath = useCallback(
     (from: string, to: string) => {
-      commit((prev) => {
-        const target = prev.documents.find((document) => samePath(document.filePath, from))
-        if (!target) return prev
-        return patchDocument(prev, target.id, { filePath: to })
-      })
+      commit((prev) => rebaseDocumentPaths(prev, from, to))
     },
     [commit]
   )
 
-  /** 文件被删除后直接关掉对应标签（调用方已完成用户确认） */
+  /** 文件或目录被删除后直接关掉对应标签（调用方已完成用户确认） */
   const closeByPath = useCallback(
     (path: string) => {
-      commit((prev) => {
-        const target = prev.documents.find((document) => samePath(document.filePath, path))
-        if (!target) return prev
-        return withoutDocument(prev, target.id)
-      })
+      commit((prev) => removeDocumentsUnder(prev, path))
     },
     [commit]
   )
 
+  /** 某个路径（可以是目录）下的文档是否有未保存修改 */
   const isPathDirty = useCallback((path: string): boolean => {
     return stateRef.current.documents.some(
-      (document) => samePath(document.filePath, path) && isDocumentDirty(document)
+      (document) =>
+        document.filePath !== null &&
+        isPathWithin(document.filePath, path) &&
+        isDocumentDirty(document)
     )
   }, [])
 

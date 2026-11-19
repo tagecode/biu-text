@@ -5,6 +5,7 @@ import { PREVIEW_ALLOWED_URI_REGEXP } from '@shared/image-url'
 import type { DiagramBlock } from '@shared/diagram'
 
 export interface RenderedBlock {
+  /** 文档内唯一：同内容块按出现次序带 `~n` 后缀，可直接用作 DOM 锚点与图表 id 前缀 */
   key: string
   /** 已消毒的 HTML，可直接插入 DOM */
   html: string
@@ -59,6 +60,14 @@ interface Generation {
   reason?: string
   /** 下一个待渲染的 span 下标 */
   next: number
+  /**
+   * 每个 span 实际使用的块 key（按需填充）。
+   * 同一段内容在文档里可能出现多次，`span.key` 只由内容决定，
+   * 不能直接当 DOM 锚点 / 图表 id 前缀，否则重复块会互相覆盖。
+   */
+  keys: string[]
+  /** 同一份内容的出现次数，用来给重复块的 key 加后缀 */
+  occurrences: Map<string, number>
   /** 已渲染的块。整个 generation 期间是同一个数组实例，调用方可据此判断"只是追加" */
   blocks: RenderedBlock[]
   done: boolean
@@ -102,6 +111,8 @@ export class BlockRenderer {
         segmented: split.segmented,
         reason: split.reason,
         next: 0,
+        keys: [],
+        occurrences: new Map(),
         blocks: [],
         done: split.spans.length === 0
       }
@@ -123,8 +134,8 @@ export class BlockRenderer {
     const { spans } = generation
 
     while (generation.next < spans.length) {
-      const span = spans[generation.next]
-      const cached = this.cache.get(span.key)
+      const key = this.spanKeyAt(generation, generation.next)
+      const cached = this.cache.get(key)
       if (cached) {
         // 命中缓存几乎零成本，不受预算限制，否则大文档每次编辑都要分很多帧
         generation.blocks.push(cached)
@@ -132,18 +143,18 @@ export class BlockRenderer {
         continue
       }
 
-      // 收集一段连续未命中的块，批量渲染 + 批量消毒
+      // 收集一段连续未命中的块，批量渲染 + 批量消毒（key 已按出现次序去重）
       const start = generation.next
       let end = start
       while (
         end < spans.length &&
         end - start < SANITIZE_BATCH_SIZE &&
-        !this.cache.has(spans[end].key)
+        !this.cache.has(this.spanKeyAt(generation, end))
       ) {
         end++
       }
 
-      for (const block of this.renderBatch(content, spans, start, end, options)) {
+      for (const block of this.renderBatch(content, spans, generation.keys, start, end, options)) {
         this.cache.set(block.key, block)
         generation.blocks.push(block)
         changedKeys.push(block.key)
@@ -165,10 +176,30 @@ export class BlockRenderer {
     }
   }
 
+  /**
+   * 取第 index 个 span 的块 key。
+   *
+   * `span.key` 只由内容与上下文决定（同时是缓存键），但同一段内容在文档里可能出现
+   * 多次（重复段落、重复 `---`、重复代码块）。如果直接拿它当 DOM 锚点与图表 id 前缀，
+   * 重复块会共用同一个锚点 / 图表 id，导致预览顺序错乱、水合只处理第一个。
+   * 因此按出现次序给后面的副本加 `~n` 后缀，保证 key 在文档内唯一。
+   */
+  private spanKeyAt(generation: Generation, index: number): string {
+    const { spans, keys, occurrences } = generation
+    while (keys.length <= index) {
+      const base = spans[keys.length].key
+      const seen = occurrences.get(base) ?? 0
+      occurrences.set(base, seen + 1)
+      keys.push(seen === 0 ? base : `${base}~${seen}`)
+    }
+    return keys[index]
+  }
+
   /** 渲染 [start, end) 这一段块；单块走直连路径，多块走批量消毒 */
   private renderBatch(
     content: string,
     spans: readonly MarkdownSpan[],
+    keys: readonly string[],
     start: number,
     end: number,
     options: BlockRenderOptions
@@ -176,7 +207,7 @@ export class BlockRenderer {
     const raw: RawBlock[] = []
     for (let index = start; index < end; index++) {
       const span = spans[index]
-      raw.push(this.renderRaw(content.slice(span.start, span.end), span.key, options))
+      raw.push(this.renderRaw(content.slice(span.start, span.end), keys[index], options))
     }
     if (raw.length === 1) {
       const only = raw[0]
